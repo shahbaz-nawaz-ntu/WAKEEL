@@ -1,0 +1,38 @@
+﻿node_modules/
+backend/node_modules/
+frontend/node_modules/
+
+# Dependencies
+package-lock.json
+yarn.lock
+
+# Environment variables
+.env
+.env.local
+.env.production
+.env.development
+
+# Build files
+build/
+dist/
+.next/
+out/
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+
+# Database
+*.sqlite
+*.db
+
+# Uploads
+uploads/
