@@ -45,7 +45,7 @@ const AuthCallback = () => {
           const user = JSON.parse(decodeURIComponent(userData));
           localStorage.setItem('user', JSON.stringify(user));
         } else {
-          // If no user data, fetch it from the server
+          // ✅ FIX: Use environment variable instead of hardcoded URL
           fetchUserData(token);
         }
         
@@ -76,10 +76,11 @@ const AuthCallback = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch user data from the server using the token
+  // ✅ FIX: Use environment variable for API URL
   const fetchUserData = async (token) => {
     try {
-      const response = await fetch('https://2a95-2400-adc7-2918-d000-8cfe-551d-492d-ed50.ngrok-free.app/api/auth/me', {
+      const apiUrl = import.meta.env.VITE_API_URL || '/api';
+      const response = await fetch(`${apiUrl}/auth/me`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

@@ -1,24 +1,37 @@
 // backend/src/controllers/proceedingController.js
 import Proceeding from '../models/Proceeding.js';
 import Case from '../models/Case.js';
-import logger from '../utils/logger.js';
-import fs from 'fs';
 import path from 'path';
-import jwt from 'jsonwebtoken';
+import fs from 'fs';
 
 // ============================================
-// GET ALL PROCEEDINGS
+// ✅ GET ALL PROCEEDINGS - FIXED
 // ============================================
 export const getAllProceedings = async (req, res) => {
   try {
-    console.log('📋 Fetching all proceedings for user:', req.user.id);
-    const proceedings = await Proceeding.find({ userId: req.user.id })
-      .sort({ date: -1 });
-    console.log(`📋 Found ${proceedings.length} proceedings`);
-    res.json({
+    console.log('📋 Fetching all proceedings...');
+    
+    // ✅ FIX: Don't populate caseId - keep it as string for frontend filtering
+    const proceedings = await Proceeding.find()
+      .sort({ createdAt: -1 });
+
+    console.log(`✅ Found ${proceedings.length} proceedings`);
+
+    // Format the response - ensure caseId is a string
+    const formattedData = proceedings.map(p => {
+      const plain = p.toObject ? p.toObject() : p;
+      return {
+        ...plain,
+        // Ensure caseId is the string ID, not an object
+        caseId: plain.caseId,
+        // Add a separate field for case details if needed
+        caseDetails: plain.caseDetails || null
+      };
+    });
+
+    res.status(200).json({
       success: true,
-      count: proceedings.length,
-      data: proceedings,
+      data: formattedData
     });
   } catch (error) {
     console.error('❌ Error fetching proceedings:', error);
@@ -30,226 +43,250 @@ export const getAllProceedings = async (req, res) => {
 };
 
 // ============================================
-// GET PROCEEDINGS BY CASE
+// ✅ GET PROCEEDINGS BY CASE - FIXED
 // ============================================
 export const getProceedingsByCase = async (req, res) => {
   try {
     const { caseId } = req.params;
-    
-    const proceedings = await Proceeding.find({ 
-      caseId: caseId,
-      userId: req.user.id
-    }).sort({ date: -1 });
-    
-    res.json({
+    console.log(`📋 Fetching proceedings for case: ${caseId}`);
+
+    // ✅ FIX: Don't populate caseId
+    const proceedings = await Proceeding.find({ caseId })
+      .sort({ createdAt: -1 });
+
+    // Format the response
+    const formattedData = proceedings.map(p => {
+      const plain = p.toObject ? p.toObject() : p;
+      return {
+        ...plain,
+        caseId: plain.caseId,
+        caseDetails: plain.caseDetails || null
+      };
+    });
+
+    console.log(`✅ Found ${formattedData.length} proceedings for case ${caseId}`);
+
+    res.status(200).json({
       success: true,
-      count: proceedings.length,
-      data: proceedings,
+      data: formattedData
     });
   } catch (error) {
-    logger.error(`Get proceedings error: ${error}`);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('❌ Error fetching proceedings by case:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 };
 
 // ============================================
-// GET SINGLE PROCEEDING
+// ✅ GET SINGLE PROCEEDING
 // ============================================
 export const getProceeding = async (req, res) => {
   try {
-    const proceeding = await Proceeding.findOne({
-      _id: req.params.id,
-      userId: req.user.id,
-    });
-    
+    const { id } = req.params;
+    console.log(`📋 Fetching proceeding: ${id}`);
+
+    const proceeding = await Proceeding.findById(id);
+
     if (!proceeding) {
-      return res.status(404).json({ success: false, error: 'Proceeding not found' });
+      return res.status(404).json({
+        success: false,
+        error: 'Proceeding not found'
+      });
     }
-    
-    res.json({ success: true, data: proceeding });
+
+    const plain = proceeding.toObject ? proceeding.toObject() : proceeding;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        ...plain,
+        caseId: plain.caseId
+      }
+    });
   } catch (error) {
-    logger.error(`Get proceeding error: ${error}`);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('❌ Error fetching proceeding:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 };
 
 // ============================================
-// CREATE PROCEEDING
+// ✅ CREATE PROCEEDING - FIXED
 // ============================================
 export const createProceeding = async (req, res) => {
   try {
-    console.log('📥 Creating proceeding with data:', req.body);
+    console.log('📝 Creating proceeding...');
+    console.log('📝 Request body:', req.body);
+    console.log('📝 User:', req.user?._id);
 
-    const caseExists = await Case.findOne({ _id: req.body.caseId, userId: req.user.id });
-    if (!caseExists) {
-      return res.status(404).json({ 
-        success: false, 
-        error: 'Case not found or you do not have access' 
+    const { 
+      caseId, 
+      createdBy, 
+      progress, 
+      nextHearingDate, 
+      status, 
+      attachment, 
+      date 
+    } = req.body;
+
+    // Validate required fields
+    if (!caseId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Case ID is required'
       });
     }
 
-    let attendees = [];
-    if (req.body.attendees) {
-      if (Array.isArray(req.body.attendees)) {
-        attendees = req.body.attendees;
-      } else if (typeof req.body.attendees === 'string') {
-        attendees = req.body.attendees.split(',').map(a => a.trim()).filter(a => a);
-      }
+    // Check if case exists
+    const caseExists = await Case.findById(caseId);
+    if (!caseExists) {
+      return res.status(404).json({
+        success: false,
+        error: 'Case not found'
+      });
     }
 
+    // Prepare proceeding data
     const proceedingData = {
-      title: req.body.title || 'Proceeding',
-      caseId: req.body.caseId,
-      type: req.body.type || 'Hearing',
-      status: req.body.status || 'Scheduled',
-      date: req.body.date || new Date(),
-      time: req.body.time || '',
-      location: req.body.location || '',
-      judge: req.body.judge || '',
-      description: req.body.description || '',
-      attendees: attendees,
-      documents: {
-        petitioner: req.body.documents?.petitioner || [],
-        research: req.body.documents?.research || [],
-        defendant: req.body.documents?.defendant || [],
-      },
-      userId: req.user.id,
+      caseId: caseId, // Keep as string
+      createdBy: createdBy || req.user?.name || 'Unknown User',
+      progress: progress || '',
+      nextHearingDate: nextHearingDate || null,
+      status: status || 'Pending for arguments.',
+      attachment: attachment || null,
+      date: date || new Date(),
+      title: caseExists.caseNumber || caseExists.title || `Proceeding ${new Date().toLocaleDateString()}`,
+      description: progress || '',
+      userId: req.user?._id || req.user?.id
     };
 
-    const proceeding = await Proceeding.create(proceedingData);
+    console.log('📝 Proceeding data:', proceedingData);
+
+    const proceeding = new Proceeding(proceedingData);
+    await proceeding.save();
+
+    // ✅ FIX: Return the proceeding WITHOUT populating caseId
+    const plainProceeding = proceeding.toObject ? proceeding.toObject() : proceeding;
     
-    logger.info(`Proceeding created: ${proceeding.title} by ${req.user.email}`);
-    
+    console.log('✅ Proceeding created:', plainProceeding);
+
     res.status(201).json({
       success: true,
-      data: proceeding,
+      data: {
+        ...plainProceeding,
+        caseId: plainProceeding.caseId // Ensure caseId is the string
+      }
     });
   } catch (error) {
-    console.error('❌ Create proceeding error:', error);
-    logger.error(`Create proceeding error: ${error}`);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('❌ Error creating proceeding:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 };
 
 // ============================================
-// UPDATE PROCEEDING
+// ✅ UPDATE PROCEEDING - FIXED
 // ============================================
 export const updateProceeding = async (req, res) => {
   try {
-    let proceeding = await Proceeding.findOne({
-      _id: req.params.id,
-      userId: req.user.id,
-    });
-    
+    const { id } = req.params;
+    console.log(`📝 Updating proceeding: ${id}`);
+    console.log('📝 Update data:', req.body);
+
+    const proceeding = await Proceeding.findById(id);
     if (!proceeding) {
-      return res.status(404).json({ success: false, error: 'Proceeding not found' });
+      return res.status(404).json({
+        success: false,
+        error: 'Proceeding not found'
+      });
     }
 
-    let attendees = proceeding.attendees || [];
-    if (req.body.attendees) {
-      if (Array.isArray(req.body.attendees)) {
-        attendees = req.body.attendees;
-      } else if (typeof req.body.attendees === 'string') {
-        attendees = req.body.attendees.split(',').map(a => a.trim()).filter(a => a);
+    // Update only allowed fields
+    const allowedFields = ['createdBy', 'progress', 'nextHearingDate', 'status', 'attachment', 'date', 'description'];
+    allowedFields.forEach(field => {
+      if (req.body[field] !== undefined) {
+        proceeding[field] = req.body[field];
       }
-    }
+    });
 
-    const updateData = {
-      title: req.body.title || proceeding.title,
-      type: req.body.type || proceeding.type,
-      status: req.body.status || proceeding.status,
-      date: req.body.date || proceeding.date,
-      time: req.body.time || proceeding.time,
-      location: req.body.location || proceeding.location,
-      judge: req.body.judge || proceeding.judge,
-      description: req.body.description || proceeding.description,
-      attendees: attendees,
-      documents: {
-        petitioner: req.body.documents?.petitioner || proceeding.documents?.petitioner || [],
-        research: req.body.documents?.research || proceeding.documents?.research || [],
-        defendant: req.body.documents?.defendant || proceeding.documents?.defendant || [],
-      },
-      updatedAt: new Date(),
-    };
+    await proceeding.save();
 
-    const updated = await Proceeding.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    );
-    
-    logger.info(`Proceeding updated: ${updated.title}`);
-    
-    res.json({
+    // ✅ FIX: Return without populating
+    const plainProceeding = proceeding.toObject ? proceeding.toObject() : proceeding;
+
+    console.log('✅ Proceeding updated:', plainProceeding);
+
+    res.status(200).json({
       success: true,
-      data: updated,
+      data: {
+        ...plainProceeding,
+        caseId: plainProceeding.caseId
+      }
     });
   } catch (error) {
-    console.error('❌ Update proceeding error:', error);
-    logger.error(`Update proceeding error: ${error}`);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('❌ Error updating proceeding:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 };
 
 // ============================================
-// DELETE PROCEEDING
+// ✅ DELETE PROCEEDING
 // ============================================
 export const deleteProceeding = async (req, res) => {
   try {
-    const proceeding = await Proceeding.findOne({
-      _id: req.params.id,
-      userId: req.user.id,
-    });
-    
+    const { id } = req.params;
+    console.log(`🗑️ Deleting proceeding: ${id}`);
+
+    const proceeding = await Proceeding.findById(id);
     if (!proceeding) {
-      return res.status(404).json({ success: false, error: 'Proceeding not found' });
+      return res.status(404).json({
+        success: false,
+        error: 'Proceeding not found'
+      });
     }
 
     await proceeding.deleteOne();
-    
-    logger.info(`Proceeding deleted: ${proceeding.title}`);
-    
-    res.json({
+
+    console.log('✅ Proceeding deleted');
+
+    res.status(200).json({
       success: true,
-      message: 'Proceeding deleted successfully',
+      message: 'Proceeding deleted successfully'
     });
   } catch (error) {
-    logger.error(`Delete proceeding error: ${error}`);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('❌ Error deleting proceeding:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
   }
 };
 
 // ============================================
-// UPLOAD DOCUMENT
+// 📎 DOCUMENT HANDLERS
 // ============================================
 export const uploadDocument = async (req, res) => {
   try {
-    const proceedingId = req.params.id;
-    const docType = req.params.type;
-    const file = req.file;
-    
-    console.log(`📤 Uploading ${docType} document to proceeding: ${proceedingId}`);
-    console.log('📄 File:', file);
-    
-    if (!['petitioner', 'research', 'defendant'].includes(docType)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid document type. Must be: petitioner, research, or defendant'
-      });
-    }
-    
-    if (!file) {
+    const { id, type } = req.params;
+    console.log(`📎 Uploading document for proceeding ${id}, type: ${type}`);
+
+    if (!req.file) {
       return res.status(400).json({
         success: false,
         error: 'No file uploaded'
       });
     }
 
-    const proceeding = await Proceeding.findOne({
-      _id: proceedingId,
-      userId: req.user.id,
-    });
-    
+    const proceeding = await Proceeding.findById(id);
     if (!proceeding) {
       return res.status(404).json({
         success: false,
@@ -257,35 +294,30 @@ export const uploadDocument = async (req, res) => {
       });
     }
 
+    // Add document to the specified type array
     if (!proceeding.documents) {
       proceeding.documents = { petitioner: [], research: [], defendant: [] };
     }
     
-    if (!proceeding.documents[docType]) {
-      proceeding.documents[docType] = [];
+    if (!proceeding.documents[type]) {
+      proceeding.documents[type] = [];
     }
-    
-    const docName = file.originalname;
-    proceeding.documents[docType].push(docName);
-    proceeding.updatedAt = Date.now();
-    
+
+    proceeding.documents[type].push(req.file.filename);
     await proceeding.save();
-    
-    console.log(`✅ Document uploaded: ${docName} to ${docType}`);
-    
-    res.json({
+
+    const plain = proceeding.toObject ? proceeding.toObject() : proceeding;
+
+    res.status(200).json({
       success: true,
-      data: proceeding,
-      document: {
-        name: docName,
-        type: docType,
-        size: file.size,
-        path: file.path
-      },
-      message: 'Document uploaded successfully'
+      message: 'Document uploaded successfully',
+      data: {
+        ...plain,
+        caseId: plain.caseId
+      }
     });
   } catch (error) {
-    console.error('❌ Upload document error:', error);
+    console.error('❌ Error uploading document:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -293,29 +325,12 @@ export const uploadDocument = async (req, res) => {
   }
 };
 
-// ============================================
-// DELETE DOCUMENT
-// ============================================
 export const deleteDocument = async (req, res) => {
   try {
-    const proceedingId = req.params.id;
-    const docType = req.params.type;
-    const docIndex = parseInt(req.params.index);
-    
-    console.log(`🗑️ Deleting document from ${docType} index ${docIndex}`);
-    
-    if (!['petitioner', 'research', 'defendant'].includes(docType)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid document type'
-      });
-    }
+    const { id, type, index } = req.params;
+    console.log(`🗑️ Deleting document from proceeding ${id}, type: ${type}, index: ${index}`);
 
-    const proceeding = await Proceeding.findOne({
-      _id: proceedingId,
-      userId: req.user.id,
-    });
-    
+    const proceeding = await Proceeding.findById(id);
     if (!proceeding) {
       return res.status(404).json({
         success: false,
@@ -323,35 +338,37 @@ export const deleteDocument = async (req, res) => {
       });
     }
 
-    if (!proceeding.documents || !proceeding.documents[docType]) {
+    if (!proceeding.documents || !proceeding.documents[type]) {
       return res.status(404).json({
         success: false,
         error: 'Document not found'
       });
     }
 
-    if (docIndex >= proceeding.documents[docType].length) {
+    const docIndex = parseInt(index);
+    if (docIndex < 0 || docIndex >= proceeding.documents[type].length) {
       return res.status(404).json({
         success: false,
-        error: 'Document index out of range'
+        error: 'Document not found'
       });
     }
 
-    const docName = proceeding.documents[docType][docIndex];
-    proceeding.documents[docType].splice(docIndex, 1);
-    proceeding.updatedAt = Date.now();
-    
+    // Remove document from array
+    proceeding.documents[type].splice(docIndex, 1);
     await proceeding.save();
-    
-    console.log(`✅ Document deleted: ${docName}`);
-    
-    res.json({
+
+    const plain = proceeding.toObject ? proceeding.toObject() : proceeding;
+
+    res.status(200).json({
       success: true,
-      data: proceeding,
-      message: 'Document deleted successfully'
+      message: 'Document deleted successfully',
+      data: {
+        ...plain,
+        caseId: plain.caseId
+      }
     });
   } catch (error) {
-    console.error('❌ Delete document error:', error);
+    console.error('❌ Error deleting document:', error);
     res.status(500).json({
       success: false,
       error: error.message
@@ -359,65 +376,12 @@ export const deleteDocument = async (req, res) => {
   }
 };
 
-// ============================================
-// ✅ VIEW DOCUMENT - FIXED (Handles both header and query param)
-// ============================================
 export const viewDocument = async (req, res) => {
   try {
-    const proceedingId = req.params.id;
-    const docType = req.params.type;
-    const docIndex = parseInt(req.params.index);
-    
-    console.log(`📄 Viewing document: ${docType} ${docIndex} from proceeding: ${proceedingId}`);
-    
-    // ✅ Get user ID from token (either in header or query param)
-    let userId = null;
-    let token = null;
-    
-    // Check Authorization header first
-    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
-      token = req.headers.authorization.split(' ')[1];
-      console.log('🔑 Token from Authorization header');
-    } 
-    // Check query parameter
-    else if (req.query.token) {
-      token = req.query.token;
-      console.log('🔑 Token from query parameter');
-    }
-    
-    if (!token) {
-      console.log('❌ No token provided');
-      return res.status(401).json({
-        success: false,
-        error: 'Authentication required. Please login.'
-      });
-    }
-    
-    // ✅ Verify the token
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'jurisflow_super_secret_key_2024_secure');
-      userId = decoded.id;
-      console.log('✅ Token verified for user:', userId);
-    } catch (err) {
-      console.log('❌ Token verification failed:', err.message);
-      return res.status(401).json({
-        success: false,
-        error: 'Invalid or expired token'
-      });
-    }
-    
-    if (!['petitioner', 'research', 'defendant'].includes(docType)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid document type'
-      });
-    }
+    const { id, type, index } = req.params;
+    console.log(`👁️ Viewing document from proceeding ${id}, type: ${type}, index: ${index}`);
 
-    const proceeding = await Proceeding.findOne({
-      _id: proceedingId,
-      userId: userId,
-    });
-    
+    const proceeding = await Proceeding.findById(id);
     if (!proceeding) {
       return res.status(404).json({
         success: false,
@@ -425,88 +389,34 @@ export const viewDocument = async (req, res) => {
       });
     }
 
-    if (!proceeding.documents || !proceeding.documents[docType]) {
+    if (!proceeding.documents || !proceeding.documents[type]) {
       return res.status(404).json({
         success: false,
-        error: 'Document section not found'
+        error: 'Document not found'
       });
     }
 
-    if (docIndex >= proceeding.documents[docType].length) {
+    const docIndex = parseInt(index);
+    if (docIndex < 0 || docIndex >= proceeding.documents[type].length) {
       return res.status(404).json({
         success: false,
-        error: 'Document index out of range'
+        error: 'Document not found'
       });
     }
 
-    const docName = proceeding.documents[docType][docIndex];
-    console.log('📄 Document name:', docName);
-    
-    // Get the file path
-    const uploadDir = 'uploads/proceedings';
-    
-    // Check if directory exists
-    if (!fs.existsSync(uploadDir)) {
-      console.log('❌ Upload directory does not exist');
-      return res.json({
-        success: true,
-        data: {
-          name: docName,
-          type: docType,
-          index: docIndex,
-          proceedingId: proceedingId,
-          message: 'Document found in database. File directory not available.'
-        }
+    const filename = proceeding.documents[type][docIndex];
+    const filepath = path.join(process.cwd(), 'uploads', 'proceedings', filename);
+
+    if (!fs.existsSync(filepath)) {
+      return res.status(404).json({
+        success: false,
+        error: 'File not found on server'
       });
     }
-    
-    // Get all files in the directory
-    const files = fs.readdirSync(uploadDir);
-    console.log('📂 Files in uploads folder:', files);
-    
-    // Find the file that matches the name
-    const file = files.find(f => {
-      const baseName = path.basename(f, path.extname(f));
-      const searchName = docName.replace(/\s/g, '_');
-      const searchName2 = path.basename(docName, path.extname(docName)).replace(/\s/g, '_');
-      return baseName.includes(searchName) || baseName.includes(searchName2);
-    });
-    
-    if (!file) {
-      console.log('❌ File not found for:', docName);
-      return res.json({
-        success: true,
-        data: {
-          name: docName,
-          type: docType,
-          index: docIndex,
-          proceedingId: proceedingId,
-          message: 'Document found in database but file not yet uploaded to server.'
-        }
-      });
-    }
-    
-    const filePath = path.join(uploadDir, file);
-    console.log('✅ File found at:', filePath);
-    
-    // Check if file exists
-    if (!fs.existsSync(filePath)) {
-      return res.json({
-        success: true,
-        data: {
-          name: docName,
-          type: docType,
-          index: docIndex,
-          proceedingId: proceedingId,
-          message: 'Document found but file is missing from server.'
-        }
-      });
-    }
-    
-    // Send the file for download
-    res.download(filePath, docName);
+
+    res.sendFile(filepath);
   } catch (error) {
-    console.error('❌ View document error:', error);
+    console.error('❌ Error viewing document:', error);
     res.status(500).json({
       success: false,
       error: error.message

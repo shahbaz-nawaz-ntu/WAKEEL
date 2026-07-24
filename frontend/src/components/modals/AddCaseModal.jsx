@@ -1,633 +1,1332 @@
-// src/components/modals/AddCaseModal.jsx
+// src/components/modals/CaseDetailModal.jsx
 import React, { useState } from 'react';
+import { FaTimes, FaEdit, FaTrash, FaUser, FaCalendarAlt, FaBuilding, FaTag, FaGavel, FaFileAlt, FaDownload, FaPrint, FaSave, FaPlus, FaPlusCircle, FaComment, FaUsers, FaInfoCircle, FaClock, FaChevronDown, FaChevronUp, FaEye, FaFile, FaCalendarCheck, FaClipboardList, FaBookmark } from 'react-icons/fa';
+import { GiJusticeStar } from 'react-icons/gi';
 import toast from 'react-hot-toast';
 
-const AddCaseModal = ({ isOpen, onClose, onAdd }) => {
-  const [formData, setFormData] = useState({
-    // Case Identification
-    caseNumber: '',
-    courtNo: '',
-    cmsNo: '',
-    officeNo: '',
-    
-    // Basic Information
-    caseTitle: '',
-    description: '',
-    party: 'N/A',
-    
-    // Status & Priority
-    status: 'active',
-    priority: 'Medium',
-    
-    // Case Type
-    caseType: 'Civil',
-    
-    // Case Nature
-    trial: '',
-    appeal: '',
-    
-    // Court Details
-    courtName: '',
-    district: '',
-    courtPreviousDate: '',
-    nextDate: '',
-    
-    // Remarks
+const CaseDetailModal = ({
+  isOpen,
+  case: caseData,
+  onClose,
+  onStatusChange,
+  onEdit,
+  onDelete,
+  onDeleteComplete,
+  onRefresh,
+  // ===== COMMENTS PROPS =====
+  comments = [],
+  commentsLoading = false,
+  onAddComment,
+  onEditComment,
+  onDeleteComment,
+  openEditCommentModal,
+  openDeleteCommentConfirm,
+  showAddCommentModal,
+  setShowAddCommentModal,
+  // ===== PARTIES PROPS =====
+  parties = [],
+  partiesLoading = false,
+  onAddParty,
+  onEditParty,
+  onDeleteParty,
+  openEditPartyModal,
+  openDeletePartyConfirm,
+  showAddPartyModal,
+  setShowAddPartyModal,
+  // ===== PROCEEDINGS PROPS =====
+  proceedings = [],
+  proceedingsLoading = false,
+  onAddProceeding,
+  onUpdateProceeding,
+  onDeleteProceeding,
+  openEditProceedingForm,
+  openDeleteConfirm,
+  openProceedingDetail,
+  showProceedingForm,
+  setShowProceedingForm,
+  proceedingFormData,
+  handleProceedingFormChange,
+  handleProceedingSubmit,
+  showEditProceedingForm,
+  setShowEditProceedingForm,
+  editingProceeding,
+  editProceedingFormData,
+  handleEditProceedingFormChange,
+  handleEditProceedingSubmit,
+  statusOptions,
+  customStatus,
+  setCustomStatus,
+  showCustomStatusInput,
+  setShowCustomStatusInput,
+  addCustomStatus,
+  editStatusOptions,
+  editCustomStatus,
+  setEditCustomStatus,
+  showEditCustomStatusInput,
+  setShowEditCustomStatusInput,
+  addEditCustomStatus,
+}) => {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isStatusUpdating, setIsStatusUpdating] = useState(false);
+  const [activeTab, setActiveTab] = useState('details');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Comment form state
+  const [commentFormData, setCommentFormData] = useState({
+    caseId: '',
+    commentedBy: '',
     remarks: '',
-    
-    // Institute
-    instituteDate: '',
-    instituteNo: '',
-    
-    // Associate
-    associateName: '',
-    associateDistrict: '',
-    
-    // Additional fields
-    amount: 'N/A',
-    judge: 'N/A',
-    attorneys: 'N/A',
-    assignedTo: 'N/A',
-    location: 'N/A',
-    court: 'N/A',
-    nexthearing: 'N/A',
-    hearings: 0,
-    documentsCount: 0,
+    requestToClientDepartment: '',
+    clientDepartments: '',
+    attachments: [],
+    status: 'Pending',
+    date: new Date().toISOString().split('T')[0]
   });
 
-  const [loading, setLoading] = useState(false);
+  // Party form state
+  const [partyFormData, setPartyFormData] = useState({
+    type: '',
+    name: '',
+    phone: '',
+    email: '',
+    cnic: '',
+    address: '',
+    createdBy: '',
+  });
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
+  if (!isOpen || !caseData) return null;
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    
-    try {
-      const submitData = {
-        // Case Identification
-        caseNumber: formData.caseNumber,
-        courtNo: formData.courtNo,
-        cmsNo: formData.cmsNo,
-        officeNo: formData.officeNo,
-        
-        // Basic Information
-        caseTitle: formData.caseTitle,
-        title: formData.caseTitle,
-        description: formData.description,
-        party: formData.party || 'N/A',
-        
-        // Status & Priority
-        status: formData.status,
-        priority: formData.priority,
-        caseType: formData.caseType,
-        
-        // Case Nature
-        caseNature: {
-          trial: formData.trial,
-          appeal: formData.appeal,
-        },
-        
-        // Court Details
-        courtDetails: {
-          courtName: formData.courtName,
-          district: formData.district,
-          courtPreviousDate: formData.courtPreviousDate,
-          nextDate: formData.nextDate,
-        },
-        
-        // Remarks
-        remarks: formData.remarks,
-        
-        // Institute
-        instituteDate: formData.instituteDate,
-        instituteNo: formData.instituteNo,
-        
-        // Associate
-        associate: {
-          name: formData.associateName,
-          district: formData.associateDistrict,
-        },
-        
-        // Additional fields
-        amount: formData.amount || 'N/A',
-        judge: formData.judge || 'N/A',
-        attorneys: formData.attorneys || 'N/A',
-        assignedTo: formData.assignedTo || 'N/A',
-        location: formData.location || 'N/A',
-        court: formData.court || 'N/A',
-        nexthearing: formData.nexthearing || 'N/A',
-        hearings: parseInt(formData.hearings) || 0,
-        documentsCount: parseInt(formData.documentsCount) || 0,
-        date: new Date().toISOString().split('T')[0],
-      };
+  const caseId = caseData.id || caseData._id;
 
-      console.log('📤 Submitting new case:', submitData);
-      
-      const result = await onAdd(submitData);
-      console.log('📦 Add result:', result);
-      
-      if (result.success) {
-        toast.success('Case added successfully!');
-        resetForm();
-        onClose();
-      } else {
-        toast.error(result.error || 'Failed to add case');
-      }
-    } catch (error) {
-      console.error('❌ Add case error:', error);
-      toast.error('Failed to add case');
-    } finally {
-      setLoading(false);
+  // Filter comments for this case
+  const caseComments = comments.filter(c => c.caseId === caseId);
+  // Filter parties for this case
+  const caseParties = parties.filter(p => p.caseId === caseId);
+  // Filter proceedings for this case
+  const caseProceedings = proceedings.filter(p => p.caseId === caseId);
+
+  const getStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'active': return 'bg-[#22C55E]/10 text-[#22C55E] border-[#22C55E]/20';
+      case 'pending': return 'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20';
+      case 'closed': return 'bg-[#6B7280]/10 text-[#6B7280] border-[#6B7280]/20';
+      default: return 'bg-[#3282B8]/10 text-[#0F4C75] border-[#3282B8]/20';
     }
   };
 
-  const resetForm = () => {
-    setFormData({
-      caseNumber: '',
-      courtNo: '',
-      cmsNo: '',
-      officeNo: '',
-      caseTitle: '',
-      description: '',
-      party: 'N/A',
-      status: 'active',
-      priority: 'Medium',
-      caseType: 'Civil',
-      trial: '',
-      appeal: '',
-      courtName: '',
-      district: '',
-      courtPreviousDate: '',
-      nextDate: '',
-      remarks: '',
-      instituteDate: '',
-      instituteNo: '',
-      associateName: '',
-      associateDistrict: '',
-      amount: 'N/A',
-      judge: 'N/A',
-      attorneys: 'N/A',
-      assignedTo: 'N/A',
-      location: 'N/A',
-      court: 'N/A',
-      nexthearing: 'N/A',
-      hearings: 0,
-      documentsCount: 0,
-    });
+  const getStatusIcon = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'active': return '🟢';
+      case 'pending': return '🟡';
+      case 'closed': return '🔴';
+      default: return '⚪';
+    }
   };
 
-  if (!isOpen) return null;
+  // ============================================
+  // REFRESH DATA
+  // ============================================
+  const refreshData = async () => {
+    if (onRefresh) {
+      setIsRefreshing(true);
+      try {
+        await onRefresh();
+        console.log('✅ Data refreshed');
+      } catch (error) {
+        console.error('❌ Error refreshing data:', error);
+      } finally {
+        setIsRefreshing(false);
+      }
+    }
+  };
 
-  return (
-    <div className="fixed inset-0 z-50 bg-white overflow-y-auto">
-      <div className="min-h-screen bg-white">
-        {/* Header */}
-        <div className="sticky top-0 z-10 bg-white border-b border-[#BBE1FA] shadow-sm">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-[#1B262C]">Add New Case</h2>
-                <p className="text-sm text-[#6B7280]">Fill in all the case details below</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-4 py-2 text-sm font-medium text-[#6B7280] hover:text-[#1B262C] hover:bg-[#F0F4F8] rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  form="addCaseForm"
-                  disabled={loading}
-                  className="px-6 py-2 bg-[#0F4C75] text-white text-sm font-medium rounded-xl hover:bg-[#1B262C] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#0F4C75]/25 flex items-center gap-2"
-                >
-                  {loading ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                      </svg>
-                      Adding...
-                    </>
-                  ) : (
-                    'Add Case'
-                  )}
-                </button>
-              </div>
+  // ============================================
+  // STATUS HANDLER
+  // ============================================
+  const handleStatusChange = async (newStatus) => {
+    if (!caseId) return;
+    setIsStatusUpdating(true);
+    try {
+      await onStatusChange(caseId, newStatus);
+      await refreshData();
+      toast.success(`Status updated to ${newStatus}`);
+    } catch (error) {
+      toast.error('Failed to update status');
+    } finally {
+      setIsStatusUpdating(false);
+    }
+  };
+
+  // ============================================
+  // DELETE HANDLER
+  // ============================================
+  const handleDelete = async () => {
+    if (!caseId) return;
+    setIsDeleting(true);
+    try {
+      await onDelete(caseId);
+      toast.success('Case deleted successfully');
+      setShowDeleteConfirm(false);
+      if (onDeleteComplete) onDeleteComplete();
+    } catch (error) {
+      toast.error('Failed to delete case');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleEdit = () => {
+    if (onEdit) onEdit(caseData);
+  };
+
+  // ============================================
+  // PROCEEDING SUBMIT HANDLER - FIXED
+  // ============================================
+  const handleProceedingSubmitWrapper = async (e) => {
+    e.preventDefault();
+    
+    if (!proceedingFormData.caseId) {
+      toast.error('Please select a case');
+      return;
+    }
+    
+    if (!proceedingFormData.createdBy) {
+      toast.error('Please enter your name');
+      return;
+    }
+    if (!proceedingFormData.progress) {
+      toast.error('Please enter progress details');
+      return;
+    }
+    if (!proceedingFormData.nextHearingDate) {
+      toast.error('Please select next hearing date');
+      return;
+    }
+    if (!proceedingFormData.status) {
+      toast.error('Please select status');
+      return;
+    }
+
+    try {
+      const proceedingData = {
+        caseId: proceedingFormData.caseId,
+        createdBy: proceedingFormData.createdBy,
+        progress: proceedingFormData.progress,
+        nextHearingDate: proceedingFormData.nextHearingDate,
+        status: proceedingFormData.status,
+        date: proceedingFormData.date || new Date().toISOString().split('T')[0],
+        attachment: proceedingFormData.attachment || null
+      };
+
+      console.log('📤 Submitting proceeding:', proceedingData);
+      
+      if (onAddProceeding) {
+        const result = await onAddProceeding(proceedingData);
+        console.log('✅ Proceeding added:', result);
+        
+        // Close the form
+        setShowProceedingForm(false);
+        
+        // Refresh data
+        await refreshData();
+        
+        toast.success('Proceeding added successfully!');
+      } else {
+        console.error('❌ onAddProceeding is not defined');
+        toast.error('Cannot add proceeding: function not available');
+      }
+    } catch (error) {
+      console.error('❌ Error adding proceeding:', error);
+      toast.error('Failed to add proceeding');
+    }
+  };
+
+  // ============================================
+  // EDIT PROCEEDING SUBMIT HANDLER - FIXED
+  // ============================================
+  const handleEditProceedingSubmitWrapper = async (e) => {
+    e.preventDefault();
+    
+    if (!editProceedingFormData.createdBy) {
+      toast.error('Please enter your name');
+      return;
+    }
+    if (!editProceedingFormData.progress) {
+      toast.error('Please enter progress details');
+      return;
+    }
+    if (!editProceedingFormData.nextHearingDate) {
+      toast.error('Please select next hearing date');
+      return;
+    }
+    if (!editProceedingFormData.status) {
+      toast.error('Please select status');
+      return;
+    }
+
+    const id = editingProceeding?.id || editingProceeding?._id;
+    if (!id) {
+      toast.error('Proceeding ID not found');
+      return;
+    }
+
+    try {
+      if (onUpdateProceeding) {
+        await onUpdateProceeding(id, editProceedingFormData);
+        setShowEditProceedingForm(false);
+        setEditingProceeding(null);
+        await refreshData();
+        toast.success('Proceeding updated successfully!');
+      } else {
+        console.error('❌ onUpdateProceeding is not defined');
+        toast.error('Cannot update proceeding: function not available');
+      }
+    } catch (error) {
+      console.error('❌ Error updating proceeding:', error);
+      toast.error('Failed to update proceeding');
+    }
+  };
+
+  // ============================================
+  // ADD COMMENT HANDLER - FIXED
+  // ============================================
+  const handleAddCommentWrapper = async () => {
+    if (!commentFormData.commentedBy) {
+      toast.error('Please enter your name');
+      return;
+    }
+
+    try {
+      const commentData = {
+        caseId: caseId,
+        commentedBy: commentFormData.commentedBy,
+        remarks: commentFormData.remarks || '',
+        requestToClientDepartment: commentFormData.requestToClientDepartment || '',
+        clientDepartments: commentFormData.clientDepartments || '',
+        attachments: commentFormData.attachments || [],
+        status: commentFormData.status,
+        date: commentFormData.date || new Date().toISOString().split('T')[0]
+      };
+
+      console.log('📤 Submitting comment:', commentData);
+      
+      if (onAddComment) {
+        await onAddComment(commentData);
+        setShowAddCommentModal(false);
+        await refreshData();
+        toast.success('Comment added successfully!');
+      } else {
+        console.error('❌ onAddComment is not defined');
+        toast.error('Cannot add comment: function not available');
+      }
+    } catch (error) {
+      console.error('❌ Error adding comment:', error);
+      toast.error('Failed to add comment');
+    }
+  };
+
+  // ============================================
+  // ADD PARTY HANDLER - FIXED
+  // ============================================
+  const handleAddPartyWrapper = async () => {
+    if (!partyFormData.type) {
+      toast.error('Please select party type');
+      return;
+    }
+    if (!partyFormData.name) {
+      toast.error('Please enter party name');
+      return;
+    }
+
+    try {
+      const partyData = {
+        caseId: caseId,
+        type: partyFormData.type,
+        name: partyFormData.name,
+        phone: partyFormData.phone || '-',
+        email: partyFormData.email || '-',
+        cnic: partyFormData.cnic || '-',
+        address: partyFormData.address || '-',
+        createdBy: partyFormData.createdBy || 'Current User'
+      };
+
+      console.log('📤 Submitting party:', partyData);
+      
+      if (onAddParty) {
+        await onAddParty(partyData);
+        setShowAddPartyModal(false);
+        await refreshData();
+        toast.success('Party added successfully!');
+      } else {
+        console.error('❌ onAddParty is not defined');
+        toast.error('Cannot add party: function not available');
+      }
+    } catch (error) {
+      console.error('❌ Error adding party:', error);
+      toast.error('Failed to add party');
+    }
+  };
+
+  // ============================================
+  // RENDER CASE DETAILS TAB
+  // ============================================
+  const renderDetails = () => (
+    <div className="space-y-6">
+      {/* Case Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-mono text-[#6B7280] bg-[#F0F4F8] px-3 py-1 rounded-lg">
+              #{caseData.caseNumber || 'N/A'}
+            </span>
+            <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(caseData.status)}`}>
+              {getStatusIcon(caseData.status)} {caseData.status || 'Unknown'}
+            </span>
+          </div>
+          <h2 className="text-xl font-bold text-[#1B262C] mt-2">{caseData.caseTitle || caseData.title || 'Untitled Case'}</h2>
+          <p className="text-sm text-[#6B7280]">Created: {caseData.date ? new Date(caseData.date).toLocaleDateString() : 'N/A'}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleEdit}
+            className="px-4 py-2 bg-[#F59E0B] text-white rounded-xl text-sm font-medium hover:bg-[#D97706] transition-all duration-200 flex items-center gap-2"
+          >
+            <FaEdit className="text-sm" /> Edit
+          </button>
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="px-4 py-2 bg-red-500 text-white rounded-xl text-sm font-medium hover:bg-red-600 transition-all duration-200 flex items-center gap-2"
+          >
+            <FaTrash className="text-sm" /> Delete
+          </button>
+          <button
+            onClick={onClose}
+            className="p-2 text-[#6B7280] hover:text-[#1B262C] hover:bg-[#F0F4F8] rounded-xl transition-all duration-200"
+          >
+            <FaTimes className="text-xl" />
+          </button>
+        </div>
+      </div>
+
+      {/* Status Update */}
+      <div className="flex items-center gap-3 p-3 bg-[#F0F4F8] rounded-xl">
+        <span className="text-sm font-medium text-[#6B7280]">Update Status:</span>
+        <select
+          value={caseData.status || ''}
+          onChange={(e) => handleStatusChange(e.target.value)}
+          disabled={isStatusUpdating}
+          className="px-3 py-1.5 bg-white border border-[#BBE1FA] rounded-lg text-sm text-[#1B262C] focus:outline-none focus:ring-2 focus:ring-[#3282B8] transition-all duration-200"
+        >
+          <option value="active">Active</option>
+          <option value="pending">Pending</option>
+          <option value="closed">Closed</option>
+        </select>
+        {isStatusUpdating && <span className="text-xs text-[#6B7280]">Updating...</span>}
+      </div>
+
+      {/* Case Info Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4">
+          <div className="flex items-start gap-3">
+            <FaBuilding className="text-[#3282B8] text-sm mt-0.5" />
+            <div>
+              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Department</p>
+              <p className="text-sm text-[#1B262C] font-medium">{caseData.department || 'N/A'}</p>
             </div>
           </div>
         </div>
 
-        {/* Form Content */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <form id="addCaseForm" onSubmit={handleSubmit} className="space-y-6">
-            
-            {/* ===== CASE IDENTIFICATION ===== */}
-            <div className="bg-[#F0F4F8] rounded-xl p-6 border-l-4 border-[#0F4C75]">
-              <h3 className="text-lg font-semibold text-[#0F4C75] mb-4 flex items-center gap-2">
-                <span className="w-1 h-8 bg-[#0F4C75] rounded-full"></span>
-                Case Identification
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">Case No. *</label>
-                  <input
-                    type="text"
-                    name="caseNumber"
-                    value={formData.caseNumber}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                    required
-                    placeholder="e.g., 2024-CV-0001"
-                  />
+        <div className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4">
+          <div className="flex items-start gap-3">
+            <FaTag className="text-[#3282B8] text-sm mt-0.5" />
+            <div>
+              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Board</p>
+              <p className="text-sm text-[#1B262C] font-medium">{caseData.board || caseData.courtName || 'N/A'}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4">
+          <div className="flex items-start gap-3">
+            <FaUser className="text-[#3282B8] text-sm mt-0.5" />
+            <div>
+              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Plaintiff</p>
+              <p className="text-sm text-[#1B262C] font-medium">{caseData.plaintiff || 'N/A'}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4">
+          <div className="flex items-start gap-3">
+            <FaUser className="text-[#3282B8] text-sm mt-0.5" />
+            <div>
+              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Defendant</p>
+              <p className="text-sm text-[#1B262C] font-medium">{caseData.defendant || 'N/A'}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4">
+          <div className="flex items-start gap-3">
+            <FaCalendarAlt className="text-[#3282B8] text-sm mt-0.5" />
+            <div>
+              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Next Hearing</p>
+              <p className="text-sm text-[#1B262C] font-medium">{caseData.nextDateOfHearing || caseData.nextHearing || caseData.nexthearing || 'N/A'}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4">
+          <div className="flex items-start gap-3">
+            <FaGavel className="text-[#3282B8] text-sm mt-0.5" />
+            <div>
+              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Case Type</p>
+              <p className="text-sm text-[#1B262C] font-medium">{caseData.caseType || caseData.natureOfCase || 'Civil'}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Law Officer */}
+      {caseData.lawOfficer && (
+        <div className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4">
+          <h4 className="text-sm font-semibold text-[#0F4C75] mb-3 flex items-center gap-2">
+            <FaUser className="text-sm" /> Law Officer
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Name</p>
+              <p className="text-sm text-[#1B262C]">{caseData.lawOfficer.name || 'N/A'}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Designation</p>
+              <p className="text-sm text-[#1B262C]">{caseData.lawOfficer.designation || 'N/A'}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Office</p>
+              <p className="text-sm text-[#1B262C]">{caseData.lawOfficer.officeAddress || 'N/A'}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Contact</p>
+              <p className="text-sm text-[#1B262C]">{caseData.lawOfficer.cellNumber || caseData.lawOfficer.officialNumber || 'N/A'}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Alternate Law Officer */}
+      {caseData.alternateLawOfficer && caseData.alternateLawOfficer.name && (
+        <div className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4">
+          <h4 className="text-sm font-semibold text-[#0F4C75] mb-3 flex items-center gap-2">
+            <FaUser className="text-sm" /> Alternate Law Officer
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Name</p>
+              <p className="text-sm text-[#1B262C]">{caseData.alternateLawOfficer.name || 'N/A'}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Designation</p>
+              <p className="text-sm text-[#1B262C]">{caseData.alternateLawOfficer.designation || 'N/A'}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Office</p>
+              <p className="text-sm text-[#1B262C]">{caseData.alternateLawOfficer.officeAddress || 'N/A'}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Contact</p>
+              <p className="text-sm text-[#1B262C]">{caseData.alternateLawOfficer.cellNumber || caseData.alternateLawOfficer.officialNumber || 'N/A'}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Written Statements */}
+      {caseData.writtenStatements && caseData.writtenStatements.length > 0 && (
+        <div className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4">
+          <h4 className="text-sm font-semibold text-[#0F4C75] mb-3 flex items-center gap-2">
+            <FaFileAlt className="text-sm" /> Written Statements ({caseData.writtenStatements.length})
+          </h4>
+          <div className="space-y-2">
+            {caseData.writtenStatements.map((statement, index) => (
+              <div key={index} className="flex items-center justify-between p-2 bg-[#F8FAFC] rounded-lg border border-[#BBE1FA]/30">
+                <div className="flex items-center gap-3">
+                  <FaFileAlt className="text-[#3282B8]" />
+                  <div>
+                    <p className="text-sm font-medium text-[#1B262C]">{statement.title || 'Statement'}</p>
+                    <p className="text-xs text-[#6B7280]">
+                      {statement.content ? `${statement.content.length} characters` : statement.fileName || ''}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">Court No.</label>
-                  <input
-                    type="text"
-                    name="courtNo"
-                    value={formData.courtNo}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                    placeholder="Court Number"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">CMS No.</label>
-                  <input
-                    type="text"
-                    name="cmsNo"
-                    value={formData.cmsNo}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                    placeholder="CMS Number"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">Office No.</label>
-                  <input
-                    type="text"
-                    name="officeNo"
-                    value={formData.officeNo}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                    placeholder="Office Number"
-                  />
+                <div className="flex items-center gap-1">
+                  {statement.content && (
+                    <button className="p-1.5 text-[#0F4C75] hover:bg-blue-50 rounded-lg transition-all" title="View">
+                      <FaEye className="text-sm" />
+                    </button>
+                  )}
+                  {statement.fileName && (
+                    <button className="p-1.5 text-[#0F4C75] hover:bg-blue-50 rounded-lg transition-all" title="Download">
+                      <FaDownload className="text-sm" />
+                    </button>
+                  )}
                 </div>
               </div>
-            </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
-            {/* ===== BASIC INFORMATION ===== */}
-            <div className="bg-[#F0F4F8] rounded-xl p-6">
-              <h3 className="text-lg font-semibold text-[#0F4C75] mb-4 flex items-center gap-2">
-                <span className="w-1 h-8 bg-[#0F4C75] rounded-full"></span>
-                Basic Information
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">Case Title *</label>
-                  <input
-                    type="text"
-                    name="caseTitle"
-                    value={formData.caseTitle}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                    required
-                    placeholder="e.g., Smith vs. Johnson Construction"
-                  />
+  // ============================================
+  // RENDER COMMENTS TAB
+  // ============================================
+  const renderComments = () => (
+    <div className="space-y-4">
+      {/* Add Comment Button */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <FaComment className="text-[#0F4C75]" />
+          <span className="text-sm font-semibold text-[#1B262C]">Comments ({caseComments.length})</span>
+        </div>
+        <button
+          onClick={() => {
+            setCommentFormData({ ...commentFormData, caseId: caseId });
+            setShowAddCommentModal(true);
+          }}
+          className="px-4 py-2 bg-[#0F4C75] text-white rounded-xl text-sm font-medium hover:bg-[#1B262C] transition-all duration-200 flex items-center gap-2"
+        >
+          <FaPlusCircle className="text-xs" /> Add Comment
+        </button>
+      </div>
+
+      {commentsLoading ? (
+        <div className="text-center py-8">
+          <div className="flex items-center justify-center gap-3">
+            <div className="w-6 h-6 border-2 border-[#0F4C75] border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-[#6B7280]">Loading comments...</span>
+          </div>
+        </div>
+      ) : caseComments.length > 0 ? (
+        <div className="space-y-3">
+          {caseComments.map((comment, index) => (
+            <div key={comment.id || comment._id || index} className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4 hover:shadow-sm transition-all">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-[#1B262C]">{comment.commentedBy}</span>
+                    <span className="text-xs text-[#6B7280]">{comment.date ? new Date(comment.date).toLocaleDateString() : 'N/A'}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                      comment.status === 'Completed' ? 'bg-[#22C55E]/10 text-[#22C55E] border-[#22C55E]/20' :
+                      comment.status === 'In Progress' ? 'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20' :
+                      comment.status === 'Closed' ? 'bg-[#6B7280]/10 text-[#6B7280] border-[#6B7280]/20' :
+                      'bg-[#3282B8]/10 text-[#0F4C75] border-[#3282B8]/20'
+                    }`}>
+                      {comment.status || 'Pending'}
+                    </span>
+                  </div>
+                  {comment.remarks && (
+                    <p className="text-sm text-[#6B7280] mt-1">{comment.remarks}</p>
+                  )}
+                  {comment.requestToClientDepartment && (
+                    <p className="text-xs text-[#0F4C75] mt-1">📌 {comment.requestToClientDepartment}</p>
+                  )}
+                  {comment.clientDepartments && (
+                    <p className="text-xs text-[#6B7280]">Department: {comment.clientDepartments}</p>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">Party</label>
-                  <input
-                    type="text"
-                    name="party"
-                    value={formData.party}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                    placeholder="e.g., Plaintiff / Defendant"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">Case Type</label>
-                  <select
-                    name="caseType"
-                    value={formData.caseType}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
+                <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                  <button
+                    onClick={() => openEditCommentModal(comment)}
+                    className="p-1.5 text-[#F59E0B] hover:bg-[#F59E0B]/10 rounded-lg transition-all"
+                    title="Edit"
                   >
-                    <option value="Civil">Civil</option>
-                    <option value="Labour">Labour</option>
-                    <option value="Service">Service</option>
-                    <option value="Tax">Tax</option>
-                    <option value="Criminal">Criminal</option>
-                    <option value="Family">Family</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-                <div className="md:col-span-2 lg:col-span-3">
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">Description</label>
-                  <textarea
-                    name="description"
-                    value={formData.description}
-                    onChange={handleChange}
-                    rows="2"
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                    placeholder="Brief description of the case..."
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* ===== CASE NATURE ===== */}
-            <div className="bg-[#F0F4F8] rounded-xl p-6">
-              <h3 className="text-lg font-semibold text-[#0F4C75] mb-4 flex items-center gap-2">
-                <span className="w-1 h-8 bg-[#0F4C75] rounded-full"></span>
-                Case Nature
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">Trial</label>
-                  <input
-                    type="text"
-                    name="trial"
-                    value={formData.trial}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                    placeholder="Trial details"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">Appeal</label>
-                  <input
-                    type="text"
-                    name="appeal"
-                    value={formData.appeal}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                    placeholder="Appeal details"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* ===== COURT DETAILS ===== */}
-            <div className="bg-[#F0F4F8] rounded-xl p-6">
-              <h3 className="text-lg font-semibold text-[#0F4C75] mb-4 flex items-center gap-2">
-                <span className="w-1 h-8 bg-[#0F4C75] rounded-full"></span>
-                Court Details
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">Court Name</label>
-                  <input
-                    type="text"
-                    name="courtName"
-                    value={formData.courtName}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                    placeholder="e.g., District Court"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">District</label>
-                  <input
-                    type="text"
-                    name="district"
-                    value={formData.district}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                    placeholder="District name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">Previous Date</label>
-                  <input
-                    type="date"
-                    name="courtPreviousDate"
-                    value={formData.courtPreviousDate}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">Next Date</label>
-                  <input
-                    type="date"
-                    name="nextDate"
-                    value={formData.nextDate}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* ===== STATUS & PRIORITY ===== */}
-            <div className="bg-[#F0F4F8] rounded-xl p-6">
-              <h3 className="text-lg font-semibold text-[#0F4C75] mb-4 flex items-center gap-2">
-                <span className="w-1 h-8 bg-[#0F4C75] rounded-full"></span>
-                Status & Priority
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">Status</label>
-                  <select
-                    name="status"
-                    value={formData.status}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
+                    <FaEdit className="text-sm" />
+                  </button>
+                  <button
+                    onClick={() => openDeleteCommentConfirm(comment)}
+                    className="p-1.5 text-[#EF4444] hover:bg-[#EF4444]/10 rounded-lg transition-all"
+                    title="Delete"
                   >
-                    <option value="active">Active</option>
-                    <option value="pending">Pending</option>
-                    <option value="closed">Closed</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">Priority</label>
-                  <select
-                    name="priority"
-                    value={formData.priority}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                  >
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                    <option value="Urgent">Urgent</option>
-                  </select>
+                    <FaTrash className="text-sm" />
+                  </button>
                 </div>
               </div>
             </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-12 bg-white rounded-xl border border-[#BBE1FA]/40">
+          <div className="text-4xl mb-2">💬</div>
+          <p className="text-sm text-[#6B7280]">No comments added yet</p>
+          <button
+            onClick={() => {
+              setCommentFormData({ ...commentFormData, caseId: caseId });
+              setShowAddCommentModal(true);
+            }}
+            className="mt-2 text-sm text-[#0F4C75] hover:text-[#3282B8] font-medium"
+          >
+            Add first comment →
+          </button>
+        </div>
+      )}
+    </div>
+  );
 
-            {/* ===== REMARKS ===== */}
-            <div className="bg-[#F0F4F8] rounded-xl p-6">
-              <h3 className="text-lg font-semibold text-[#0F4C75] mb-4 flex items-center gap-2">
-                <span className="w-1 h-8 bg-[#0F4C75] rounded-full"></span>
-                Remarks
-              </h3>
+  // ============================================
+  // RENDER PARTIES TAB
+  // ============================================
+  const renderParties = () => (
+    <div className="space-y-4">
+      {/* Add Party Button */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <FaUsers className="text-[#0F4C75]" />
+          <span className="text-sm font-semibold text-[#1B262C]">Parties ({caseParties.length})</span>
+        </div>
+        <button
+          onClick={() => {
+            setPartyFormData({ ...partyFormData, caseId: caseId });
+            setShowAddPartyModal(true);
+          }}
+          className="px-4 py-2 bg-[#0F4C75] text-white rounded-xl text-sm font-medium hover:bg-[#1B262C] transition-all duration-200 flex items-center gap-2"
+        >
+          <FaPlusCircle className="text-xs" /> Add Party
+        </button>
+      </div>
+
+      {partiesLoading ? (
+        <div className="text-center py-8">
+          <div className="flex items-center justify-center gap-3">
+            <div className="w-6 h-6 border-2 border-[#0F4C75] border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-[#6B7280]">Loading parties...</span>
+          </div>
+        </div>
+      ) : caseParties.length > 0 ? (
+        <div className="space-y-3">
+          {caseParties.map((party, index) => (
+            <div key={party.id || party._id || index} className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4 hover:shadow-sm transition-all">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2 py-0.5 bg-[#3282B8]/10 text-[#0F4C75] rounded text-xs font-medium border border-[#3282B8]/20">
+                      {party.type || 'Party'}
+                    </span>
+                    <span className="font-medium text-[#1B262C]">{party.name}</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 mt-2">
+                    {party.phone && party.phone !== '-' && (
+                      <p className="text-xs text-[#6B7280] flex items-center gap-1">
+                        <span>📞</span> {party.phone}
+                      </p>
+                    )}
+                    {party.email && party.email !== '-' && (
+                      <p className="text-xs text-[#6B7280] flex items-center gap-1">
+                        <span>✉️</span> {party.email}
+                      </p>
+                    )}
+                    {party.cnic && party.cnic !== '-' && (
+                      <p className="text-xs text-[#6B7280] flex items-center gap-1">
+                        <span>🪪</span> {party.cnic}
+                      </p>
+                    )}
+                    {party.address && party.address !== '-' && (
+                      <p className="text-xs text-[#6B7280] flex items-center gap-1 col-span-2">
+                        <span>📍</span> {party.address}
+                      </p>
+                    )}
+                  </div>
+                  {party.createdBy && (
+                    <p className="text-[10px] text-[#9CA3AF] mt-1">Added by: {party.createdBy}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                  <button
+                    onClick={() => openEditPartyModal(party)}
+                    className="p-1.5 text-[#F59E0B] hover:bg-[#F59E0B]/10 rounded-lg transition-all"
+                    title="Edit"
+                  >
+                    <FaEdit className="text-sm" />
+                  </button>
+                  <button
+                    onClick={() => openDeletePartyConfirm(party)}
+                    className="p-1.5 text-[#EF4444] hover:bg-[#EF4444]/10 rounded-lg transition-all"
+                    title="Delete"
+                  >
+                    <FaTrash className="text-sm" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-12 bg-white rounded-xl border border-[#BBE1FA]/40">
+          <div className="text-4xl mb-2">👥</div>
+          <p className="text-sm text-[#6B7280]">No parties added yet</p>
+          <button
+            onClick={() => {
+              setPartyFormData({ ...partyFormData, caseId: caseId });
+              setShowAddPartyModal(true);
+            }}
+            className="mt-2 text-sm text-[#0F4C75] hover:text-[#3282B8] font-medium"
+          >
+            Add first party →
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  // ============================================
+  // RENDER PROCEEDINGS TAB
+  // ============================================
+  const renderProceedings = () => (
+    <div className="space-y-4">
+      {/* Add Proceeding Button */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <FaGavel className="text-[#0F4C75]" />
+          <span className="text-sm font-semibold text-[#1B262C]">Proceedings ({caseProceedings.length})</span>
+        </div>
+        <button
+          onClick={() => {
+            setShowProceedingForm(!showProceedingForm);
+          }}
+          className="px-4 py-2 bg-[#0F4C75] text-white rounded-xl text-sm font-medium hover:bg-[#1B262C] transition-all duration-200 flex items-center gap-2"
+        >
+          {showProceedingForm ? <FaTimes className="text-xs" /> : <FaPlusCircle className="text-xs" />}
+          {showProceedingForm ? 'Close Form' : 'Add Proceeding'}
+        </button>
+      </div>
+
+      {/* Add Proceeding Form */}
+      {showProceedingForm && (
+        <div className="bg-white rounded-xl border-2 border-[#3282B8] p-4 animate-in fade-in slide-in-from-top duration-300">
+          <div className="flex items-center justify-between mb-3 pb-2 border-b border-[#BBE1FA]/30">
+            <div className="flex items-center gap-2">
+              <FaGavel className="text-[#0F4C75]" />
+              <span className="text-sm font-semibold text-[#1B262C]">New Proceeding</span>
+            </div>
+          </div>
+          <form onSubmit={handleProceedingSubmitWrapper}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <textarea
-                  name="remarks"
-                  value={formData.remarks}
-                  onChange={handleChange}
-                  rows="3"
-                  className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                  placeholder="Any additional remarks..."
+                <label className="block text-xs font-medium text-[#6B7280] mb-1">Created By *</label>
+                <input
+                  type="text"
+                  value={proceedingFormData.createdBy}
+                  onChange={(e) => handleProceedingFormChange('createdBy', e.target.value)}
+                  placeholder="Enter your name"
+                  required
+                  className="w-full px-3 py-2 border border-[#BBE1FA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#6B7280] mb-1">Date *</label>
+                <input
+                  type="date"
+                  value={proceedingFormData.date}
+                  onChange={(e) => handleProceedingFormChange('date', e.target.value)}
+                  required
+                  className="w-full px-3 py-2 border border-[#BBE1FA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] text-sm"
                 />
               </div>
             </div>
-
-            {/* ===== INSTITUTE ===== */}
-            <div className="bg-[#F0F4F8] rounded-xl p-6">
-              <h3 className="text-lg font-semibold text-[#0F4C75] mb-4 flex items-center gap-2">
-                <span className="w-1 h-8 bg-[#0F4C75] rounded-full"></span>
-                Institute
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">Institute Date</label>
-                  <input
-                    type="date"
-                    name="instituteDate"
-                    value={formData.instituteDate}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">Institute No.</label>
-                  <input
-                    type="text"
-                    name="instituteNo"
-                    value={formData.instituteNo}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                    placeholder="Institute Number"
-                  />
-                </div>
+            <div className="mt-3">
+              <label className="block text-xs font-medium text-[#6B7280] mb-1">Progress on Date of Hearing *</label>
+              <textarea
+                value={proceedingFormData.progress}
+                onChange={(e) => handleProceedingFormChange('progress', e.target.value)}
+                placeholder="Enter progress"
+                required
+                rows="2"
+                className="w-full px-3 py-2 border border-[#BBE1FA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] text-sm resize-none"
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+              <div>
+                <label className="block text-xs font-medium text-[#6B7280] mb-1">Next Hearing Date *</label>
+                <input
+                  type="date"
+                  value={proceedingFormData.nextHearingDate}
+                  onChange={(e) => handleProceedingFormChange('nextHearingDate', e.target.value)}
+                  required
+                  className="w-full px-3 py-2 border border-[#BBE1FA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#6B7280] mb-1">Status</label>
+                <select
+                  value={proceedingFormData.status}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === 'Others') {
+                      setShowCustomStatusInput(true);
+                      handleProceedingFormChange('status', '');
+                    } else {
+                      setShowCustomStatusInput(false);
+                      handleProceedingFormChange('status', value);
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-[#BBE1FA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] text-sm"
+                >
+                  <option value="">- Select Status -</option>
+                  {statusOptions.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+                {showCustomStatusInput && (
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      type="text"
+                      value={customStatus}
+                      onChange={(e) => setCustomStatus(e.target.value)}
+                      placeholder="Enter custom status..."
+                      className="flex-1 px-3 py-1.5 border border-[#3282B8] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3282B8]"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (customStatus.trim()) {
+                          addCustomStatus(customStatus.trim());
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-[#0F4C75] text-white rounded-lg text-sm"
+                    >
+                      Add
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCustomStatusInput(false);
+                        setCustomStatus('');
+                      }}
+                      className="px-3 py-1.5 text-sm text-[#6B7280] hover:text-[#1B262C]"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
-
-            {/* ===== ASSOCIATE ===== */}
-            <div className="bg-[#F0F4F8] rounded-xl p-6">
-              <h3 className="text-lg font-semibold text-[#0F4C75] mb-4 flex items-center gap-2">
-                <span className="w-1 h-8 bg-[#0F4C75] rounded-full"></span>
-                Associate
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">Name</label>
+            <div className="mt-3">
+              <label className="block text-xs font-medium text-[#6B7280] mb-1">Attachment</label>
+              <div className="flex items-center gap-3">
+                <label className="flex-1 px-3 py-2 border-2 border-dashed border-[#BBE1FA] rounded-lg cursor-pointer hover:border-[#3282B8] transition-all bg-[#F8FAFC] text-center">
+                  <span className="text-sm text-[#6B7280]">Choose File</span>
                   <input
-                    type="text"
-                    name="associateName"
-                    value={formData.associateName}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                    placeholder="Associate name"
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files[0]) {
+                        handleProceedingFormChange('attachment', e.target.files[0].name);
+                      }
+                    }}
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">District</label>
-                  <input
-                    type="text"
-                    name="associateDistrict"
-                    value={formData.associateDistrict}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                    placeholder="Associate district"
-                  />
-                </div>
+                </label>
+                {proceedingFormData.attachment && (
+                  <span className="text-sm text-[#0F4C75] font-medium">{proceedingFormData.attachment}</span>
+                )}
               </div>
             </div>
-
-            {/* ===== ADDITIONAL INFORMATION ===== */}
-            <div className="bg-[#F0F4F8] rounded-xl p-6">
-              <h3 className="text-lg font-semibold text-[#0F4C75] mb-4 flex items-center gap-2">
-                <span className="w-1 h-8 bg-[#0F4C75] rounded-full"></span>
-                Additional Information
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">Amount</label>
-                  <input
-                    type="text"
-                    name="amount"
-                    value={formData.amount}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                    placeholder="e.g., $50,000 or N/A"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">Judge</label>
-                  <input
-                    type="text"
-                    name="judge"
-                    value={formData.judge}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                    placeholder="e.g., Hon. John Doe"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">Assigned To</label>
-                  <input
-                    type="text"
-                    name="assignedTo"
-                    value={formData.assignedTo}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                    placeholder="Attorney name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">Next Hearing</label>
-                  <input
-                    type="date"
-                    name="nexthearing"
-                    value={formData.nexthearing}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">Hearings</label>
-                  <input
-                    type="number"
-                    name="hearings"
-                    value={formData.hearings}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                    min="0"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#1B262C] mb-1">Documents Count</label>
-                  <input
-                    type="number"
-                    name="documentsCount"
-                    value={formData.documentsCount}
-                    onChange={handleChange}
-                    className="w-full px-3 py-2.5 border border-[#BBE1FA] rounded-xl focus:outline-none focus:ring-4 focus:ring-[#3282B8]/10 focus:border-[#3282B8] transition-all duration-200 bg-white"
-                    min="0"
-                  />
-                </div>
-              </div>
+            <div className="flex items-center justify-end gap-3 mt-4 pt-3 border-t border-[#BBE1FA]/30">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowProceedingForm(false);
+                  setShowCustomStatusInput(false);
+                  setCustomStatus('');
+                }}
+                className="px-4 py-2 text-sm font-medium text-[#6B7280] hover:text-[#1B262C] rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 text-sm font-medium bg-[#0F4C75] text-white rounded-lg hover:bg-[#1B262C] transition-all flex items-center gap-2"
+              >
+                <FaPlus className="text-xs" /> Add Proceeding
+              </button>
             </div>
           </form>
         </div>
-      </div>
+      )}
+
+      {/* Edit Proceeding Form */}
+      {showEditProceedingForm && editingProceeding && (
+        <div className="bg-white rounded-xl border-2 border-[#F59E0B] p-4 animate-in fade-in slide-in-from-top duration-300">
+          <div className="flex items-center justify-between mb-3 pb-2 border-b border-[#BBE1FA]/30">
+            <div className="flex items-center gap-2">
+              <FaEdit className="text-[#F59E0B]" />
+              <span className="text-sm font-semibold text-[#1B262C]">Edit Proceeding</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowEditProceedingForm(false);
+                setEditingProceeding(null);
+              }}
+              className="p-1 text-[#9CA3AF] hover:text-[#1B262C]"
+            >
+              <FaTimes />
+            </button>
+          </div>
+          <form onSubmit={handleEditProceedingSubmitWrapper}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-[#6B7280] mb-1">Created By *</label>
+                <input
+                  type="text"
+                  value={editProceedingFormData.createdBy}
+                  onChange={(e) => handleEditProceedingFormChange('createdBy', e.target.value)}
+                  placeholder="Enter your name"
+                  required
+                  className="w-full px-3 py-2 border border-[#BBE1FA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F59E0B] text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#6B7280] mb-1">Date *</label>
+                <input
+                  type="date"
+                  value={editProceedingFormData.date}
+                  onChange={(e) => handleEditProceedingFormChange('date', e.target.value)}
+                  required
+                  className="w-full px-3 py-2 border border-[#BBE1FA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F59E0B] text-sm"
+                />
+              </div>
+            </div>
+            <div className="mt-3">
+              <label className="block text-xs font-medium text-[#6B7280] mb-1">Progress on Date of Hearing *</label>
+              <textarea
+                value={editProceedingFormData.progress}
+                onChange={(e) => handleEditProceedingFormChange('progress', e.target.value)}
+                placeholder="Enter progress"
+                required
+                rows="2"
+                className="w-full px-3 py-2 border border-[#BBE1FA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F59E0B] text-sm resize-none"
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+              <div>
+                <label className="block text-xs font-medium text-[#6B7280] mb-1">Next Hearing Date *</label>
+                <input
+                  type="date"
+                  value={editProceedingFormData.nextHearingDate}
+                  onChange={(e) => handleEditProceedingFormChange('nextHearingDate', e.target.value)}
+                  required
+                  className="w-full px-3 py-2 border border-[#BBE1FA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F59E0B] text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#6B7280] mb-1">Status</label>
+                <select
+                  value={editProceedingFormData.status}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === 'Others') {
+                      setShowEditCustomStatusInput(true);
+                      handleEditProceedingFormChange('status', '');
+                    } else {
+                      setShowEditCustomStatusInput(false);
+                      handleEditProceedingFormChange('status', value);
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-[#BBE1FA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F59E0B] text-sm"
+                >
+                  <option value="">- Select Status -</option>
+                  {editStatusOptions.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+                {showEditCustomStatusInput && (
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      type="text"
+                      value={editCustomStatus}
+                      onChange={(e) => setEditCustomStatus(e.target.value)}
+                      placeholder="Enter custom status..."
+                      className="flex-1 px-3 py-1.5 border border-[#F59E0B] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F59E0B]"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (editCustomStatus.trim()) {
+                          addEditCustomStatus(editCustomStatus.trim());
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-[#F59E0B] text-white rounded-lg text-sm"
+                    >
+                      Add
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowEditCustomStatusInput(false);
+                        setEditCustomStatus('');
+                      }}
+                      className="px-3 py-1.5 text-sm text-[#6B7280] hover:text-[#1B262C]"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="mt-3">
+              <label className="block text-xs font-medium text-[#6B7280] mb-1">Attachment</label>
+              <div className="flex items-center gap-3">
+                <label className="flex-1 px-3 py-2 border-2 border-dashed border-[#BBE1FA] rounded-lg cursor-pointer hover:border-[#F59E0B] transition-all bg-[#F8FAFC] text-center">
+                  <span className="text-sm text-[#6B7280]">Choose File</span>
+                  <input
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files[0]) {
+                        handleEditProceedingFormChange('attachment', e.target.files[0].name);
+                      }
+                    }}
+                  />
+                </label>
+                {editProceedingFormData.attachment && (
+                  <span className="text-sm text-[#F59E0B] font-medium">{editProceedingFormData.attachment}</span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 mt-4 pt-3 border-t border-[#BBE1FA]/30">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEditProceedingForm(false);
+                  setEditingProceeding(null);
+                  setShowEditCustomStatusInput(false);
+                  setEditCustomStatus('');
+                }}
+                className="px-4 py-2 text-sm font-medium text-[#6B7280] hover:text-[#1B262C] rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 text-sm font-medium bg-[#F59E0B] text-white rounded-lg hover:bg-[#D97706] transition-all flex items-center gap-2"
+              >
+                <FaSave className="text-xs" /> Update
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Proceedings List */}
+      {proceedingsLoading ? (
+        <div className="text-center py-8">
+          <div className="flex items-center justify-center gap-3">
+            <div className="w-6 h-6 border-2 border-[#0F4C75] border-t-transparent rounded-full animate-spin"></div>
+            <span className="text-[#6B7280]">Loading proceedings...</span>
+          </div>
+        </div>
+      ) : caseProceedings.length > 0 ? (
+        <div className="space-y-3">
+          {caseProceedings.map((p, index) => (
+            <div
+              key={p.id || p._id || index}
+              className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4 hover:shadow-sm transition-all cursor-pointer"
+              onClick={() => openProceedingDetail(p)}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-[#1B262C]">{p.createdBy || 'N/A'}</span>
+                    <span className="text-xs text-[#6B7280]">{p.date ? new Date(p.date).toLocaleDateString() : 'N/A'}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${
+                      p.status?.toLowerCase().includes('adjournment') ? 'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20' :
+                      p.status?.toLowerCase().includes('decision') ? 'bg-[#22C55E]/10 text-[#22C55E] border-[#22C55E]/20' :
+                      p.status?.toLowerCase().includes('dismissed') ? 'bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/20' :
+                      'bg-[#3282B8]/10 text-[#0F4C75] border-[#3282B8]/20'
+                    }`}>
+                      {p.status || 'N/A'}
+                    </span>
+                  </div>
+                  <p className="text-sm text-[#6B7280] mt-1 line-clamp-2">{p.progress || p.description || 'N/A'}</p>
+                  {p.nextHearingDate && (
+                    <p className="text-xs text-[#0F4C75] mt-1 flex items-center gap-1">
+                      <FaCalendarAlt className="text-[10px]" /> Next: {new Date(p.nextHearingDate).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 ml-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={() => openEditProceedingForm(p)}
+                    className="p-1.5 text-[#F59E0B] hover:bg-[#F59E0B]/10 rounded-lg transition-all"
+                    title="Edit"
+                  >
+                    <FaEdit className="text-sm" />
+                  </button>
+                  <button
+                    onClick={() => openDeleteConfirm(p.id || p._id, `${p.createdBy || 'Proceeding'}`)}
+                    className="p-1.5 text-[#EF4444] hover:bg-[#EF4444]/10 rounded-lg transition-all"
+                    title="Delete"
+                  >
+                    <FaTrash className="text-sm" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-12 bg-white rounded-xl border border-[#BBE1FA]/40">
+          <div className="text-4xl mb-2">📋</div>
+          <p className="text-sm text-[#6B7280]">No proceedings recorded yet</p>
+          <button
+            onClick={() => setShowProceedingForm(true)}
+            className="mt-2 text-sm text-[#0F4C75] hover:text-[#3282B8] font-medium"
+          >
+            Add first proceeding →
+          </button>
+        </div>
+      )}
     </div>
+  );
+
+  // ============================================
+  // MAIN MODAL RENDER
+  // ============================================
+  return (
+    <>
+      {/* Delete Confirmation */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#1B262C]/70 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-red-500/20">
+            <div className="flex justify-center mb-4">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-lg shadow-red-500/30 animate-pulse">
+                <FaTrash className="text-3xl text-white" />
+              </div>
+            </div>
+            <h3 className="text-xl font-bold text-[#1B262C] text-center mb-2">Delete Case?</h3>
+            <p className="text-[#6B7280] text-center text-sm mb-6">
+              Are you sure you want to delete this case? This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-[#6B7280] bg-[#F0F4F8] rounded-xl hover:bg-[#E5E7EB] transition-all"
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-red-500 to-red-600 rounded-xl hover:shadow-lg hover:shadow-red-500/30 transition-all flex items-center justify-center gap-2"
+              >
+                {isDeleting ? (
+                  <>
+                    <span className="animate-spin">⟳</span> Deleting...
+                  </>
+                ) : (
+                  <>
+                    <FaTrash className="text-sm" /> Delete
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Modal */}
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1B262C]/70 backdrop-blur-sm animate-in fade-in duration-200 p-4">
+        <div className="bg-white rounded-3xl max-w-5xl w-full max-h-[90vh] overflow-hidden shadow-2xl animate-in zoom-in duration-200 border border-[#3282B8]/20">
+          
+          {/* Modal Header - Always visible */}
+          <div className="relative bg-gradient-to-r from-[#0F4C75] to-[#3282B8] px-6 py-4 rounded-t-3xl flex-shrink-0">
+            <div className="absolute inset-0 bg-white/5 rounded-t-3xl"></div>
+            <div className="relative flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg">
+                  <GiJusticeStar className="text-xl text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Case Details</h3>
+                  <p className="text-white/70 text-xs">#{caseData.caseNumber || 'N/A'}</p>
+                </div>
+              </div>
+              <button
+                onClick={onClose}
+                className="p-2 text-white/60 hover:text-white hover:bg-white/20 rounded-xl transition-all duration-200 flex-shrink-0"
+              >
+                <FaTimes className="text-xl" />
+              </button>
+            </div>
+          </div>
+
+          {/* Modal Body - Scrollable */}
+          <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+            
+            {/* Tabs */}
+            <div className="flex items-center gap-1 mb-6 bg-[#F0F4F8] rounded-xl p-1">
+              <button
+                onClick={() => setActiveTab('details')}
+                className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  activeTab === 'details'
+                    ? 'bg-white text-[#0F4C75] shadow-sm'
+                    : 'text-[#6B7280] hover:text-[#1B262C]'
+                }`}
+              >
+                <FaInfoCircle className="inline mr-2 text-xs" />
+                Details
+              </button>
+              <button
+                onClick={() => setActiveTab('comments')}
+                className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  activeTab === 'comments'
+                    ? 'bg-white text-[#0F4C75] shadow-sm'
+                    : 'text-[#6B7280] hover:text-[#1B262C]'
+                }`}
+              >
+                <FaComment className="inline mr-2 text-xs" />
+                Comments ({caseComments.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('parties')}
+                className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  activeTab === 'parties'
+                    ? 'bg-white text-[#0F4C75] shadow-sm'
+                    : 'text-[#6B7280] hover:text-[#1B262C]'
+                }`}
+              >
+                <FaUsers className="inline mr-2 text-xs" />
+                Parties ({caseParties.length})
+              </button>
+              <button
+                onClick={() => setActiveTab('proceedings')}
+                className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  activeTab === 'proceedings'
+                    ? 'bg-white text-[#0F4C75] shadow-sm'
+                    : 'text-[#6B7280] hover:text-[#1B262C]'
+                }`}
+              >
+                <FaGavel className="inline mr-2 text-xs" />
+                Proceedings ({caseProceedings.length})
+              </button>
+            </div>
+
+            {/* Tab Content */}
+            {activeTab === 'details' && renderDetails()}
+            {activeTab === 'comments' && renderComments()}
+            {activeTab === 'parties' && renderParties()}
+            {activeTab === 'proceedings' && renderProceedings()}
+
+          </div>
+        </div>
+      </div>
+    </>
   );
 };
 
-export default AddCaseModal;
+export default CaseDetailModal;

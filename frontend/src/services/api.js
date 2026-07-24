@@ -1,7 +1,9 @@
 // src/services/api.js
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://2a95-2400-adc7-2918-d000-8cfe-551d-492d-ed50.ngrok-free.app/api';
+// ✅ FIX: Use relative URL for development with proxy
+// The proxy will forward /api to http://localhost:5000/api
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 const API_TIMEOUT = parseInt(import.meta.env.VITE_API_TIMEOUT) || 30000;
 
 // Create axios instance
@@ -10,7 +12,9 @@ const api = axios.create({
   timeout: API_TIMEOUT,
   headers: {
     'Content-Type': 'application/json',
+    'Accept': 'application/json',
   },
+  withCredentials: true, // ✅ Add this for cookies if needed
 });
 
 // Request interceptor - Add token to requests
@@ -70,6 +74,12 @@ api.interceptors.response.use(
         localStorage.removeItem('user');
         window.location.href = '/login';
       }
+    }
+    
+    // Handle network errors
+    if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+      console.error('📡 Network error - check if backend is running');
+      // Don't redirect on network errors, just log
     }
     
     // Debug logging for errors

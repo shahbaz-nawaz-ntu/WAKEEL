@@ -1,3 +1,4 @@
+// frontend/src/services/client.js
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import { config } from '../config';
@@ -5,9 +6,27 @@ import { config } from '../config';
 // ============================================
 // API Configuration
 // ============================================
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// 🔥 FIX: Use relative URL for development (will use proxy)
+// For production, use the full URL
+const getApiUrl = () => {
+  // If running in development with ngrok, use the ngrok URL
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  // For local development with proxy
+  if (import.meta.env.DEV) {
+    return '/api';
+  }
+  // For production
+  return '/api';
+};
+
+const API_URL = getApiUrl();
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || '1.0.0';
 const APP_ENV = import.meta.env.VITE_APP_ENV || 'development';
+
+console.log('📡 API URL:', API_URL);
+console.log('🌍 Environment:', APP_ENV);
 
 // ============================================
 // Create axios instance
@@ -18,9 +37,6 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
-    'X-App-Version': APP_VERSION,
-    'X-App-Env': APP_ENV,
-    'X-Platform': 'web',
   },
   withCredentials: true,
 });
@@ -36,11 +52,10 @@ apiClient.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    // Add request ID for tracking
-    config.headers['X-Request-ID'] = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-    // Add device info
-    config.headers['X-Device'] = navigator.userAgent || 'Unknown';
+    // 🔥 FIX: Add origin header for CORS
+    if (typeof window !== 'undefined') {
+      config.headers['Origin'] = window.location.origin;
+    }
 
     // Log requests in development
     if (APP_ENV === 'development') {
@@ -48,6 +63,7 @@ apiClient.interceptors.request.use(
         data: config.data,
         params: config.params,
         headers: config.headers,
+        baseURL: config.baseURL,
       });
     }
 
@@ -71,15 +87,41 @@ apiClient.interceptors.response.use(
         data: response.data,
       });
     }
-    return response.data;
+    // 🔥 FIX: Return the full response object
+    return response;
   },
   async (error) => {
     const originalRequest = error.config;
 
     // ============================================
-    // Network Error
+    // Network Error - CORS or Connection
     // ============================================
     if (!error.response) {
+      console.error('❌ Network/CORS Error:', error.message);
+      
+      // 🔥 FIX: Try without credentials for CORS issues
+      if (error.message.includes('NetworkError') || error.message.includes('CORS')) {
+        try {
+          const response = await fetch(`${API_URL}${originalRequest.url}`, {
+            method: originalRequest.method,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
+            },
+            mode: 'cors',
+            credentials: 'omit', // 🔥 Try without credentials
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            return { data, status: response.status };
+          }
+        } catch (fallbackError) {
+          console.error('❌ Fallback request failed:', fallbackError);
+        }
+      }
+      
       toast.error('Network error. Please check your connection.', {
         duration: 5000,
         icon: '📡',
@@ -105,6 +147,11 @@ apiClient.interceptors.response.use(
 
         const response = await axios.post(`${API_URL}/auth/refresh`, {
           refreshToken,
+        }, {
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'application/json',
+          },
         });
 
         const { token, refreshToken: newRefreshToken } = response.data;
@@ -160,12 +207,13 @@ apiClient.interceptors.response.use(
     // Handle 404 Not Found
     // ============================================
     if (error.response.status === 404) {
-      toast.error('Resource not found.', {
+      const message = error.response.data?.message || 'Resource not found.';
+      toast.error(message, {
         duration: 3000,
         icon: '🔍',
       });
       return Promise.reject({
-        message: 'Resource not found',
+        message,
         status: 404,
         type: 'not_found',
         data: error.response.data,
@@ -273,33 +321,71 @@ apiClient.interceptors.response.use(
 // ============================================
 export const api = {
   // Standard HTTP methods
-  get: (url, config = {}) => apiClient.get(url, config),
-  post: (url, data, config = {}) => apiClient.post(url, data, config),
-  put: (url, data, config = {}) => apiClient.put(url, data, config),
-  patch: (url, data, config = {}) => apiClient.patch(url, data, config),
-  delete: (url, config = {}) => apiClient.delete(url, config),
-  head: (url, config = {}) => apiClient.head(url, config),
-  options: (url, config = {}) => apiClient.options(url, config),
+  get: async (url, config = {}) => {
+    try {
+      const response = await apiClient.get(url, config);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+  post: async (url, data, config = {}) => {
+    try {
+      const response = await apiClient.post(url, data, config);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+  put: async (url, data, config = {}) => {
+    try {
+      const response = await apiClient.put(url, data, config);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+  patch: async (url, data, config = {}) => {
+    try {
+      const response = await apiClient.patch(url, data, config);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+  delete: async (url, config = {}) => {
+    try {
+      const response = await apiClient.delete(url, config);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
 
   // ============================================
   // File Upload with Progress
   // ============================================
-  upload: (url, formData, onProgress, config = {}) => {
-    return apiClient.post(url, formData, {
-      ...config,
-      headers: {
-        'Content-Type': 'multipart/form-data',
-        ...config.headers,
-      },
-      onUploadProgress: (progressEvent) => {
-        if (onProgress) {
-          const percentCompleted = Math.round(
-            (progressEvent.loaded * 100) / progressEvent.total
-          );
-          onProgress(percentCompleted);
-        }
-      },
-    });
+  upload: async (url, formData, onProgress, config = {}) => {
+    try {
+      const response = await apiClient.post(url, formData, {
+        ...config,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          ...config.headers,
+        },
+        onUploadProgress: (progressEvent) => {
+          if (onProgress) {
+            const percentCompleted = Math.round(
+              (progressEvent.loaded * 100) / progressEvent.total
+            );
+            onProgress(percentCompleted);
+          }
+        },
+      });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
   },
 
   // ============================================
@@ -310,7 +396,7 @@ export const api = {
       ...config,
       responseType: 'blob',
     }).then((response) => {
-      const url = window.URL.createObjectURL(new Blob([response]));
+      const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', filename || 'download');
@@ -367,7 +453,8 @@ export const api = {
       }
     }
 
-    return apiClient.get(url, config).then((data) => {
+    return apiClient.get(url, config).then((response) => {
+      const data = response.data;
       sessionStorage.setItem(cacheKey, JSON.stringify({
         data,
         timestamp: Date.now(),
@@ -404,7 +491,7 @@ export const cancelAllRequests = () => {
 export const healthCheck = async () => {
   try {
     const response = await apiClient.get('/health');
-    return { status: 'healthy', data: response };
+    return { status: 'healthy', data: response.data };
   } catch (error) {
     return { status: 'unhealthy', error: error.message };
   }

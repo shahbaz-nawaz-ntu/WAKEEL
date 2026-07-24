@@ -1,7 +1,9 @@
 // src/hooks/useCases.js
 import { useState, useCallback, useEffect } from 'react';
 
-const API_URL = 'https://2a95-2400-adc7-2918-d000-8cfe-551d-492d-ed50.ngrok-free.app/api';
+// ✅ FIX: Use relative URL for development with proxy
+// or use environment variable for production
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 export const useCases = () => {
   const [cases, setCases] = useState([]);
@@ -12,12 +14,18 @@ export const useCases = () => {
   const getAuthHeader = () => {
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
     console.log('🔑 Token:', token ? 'Present' : 'Missing');
-    return {
-      headers: {
-        'Authorization': token ? `Bearer ${token}` : '',
-        'Content-Type': 'application/json',
-      },
+    
+    // ✅ FIX: Return proper headers object for fetch
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
     };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    return { headers };
   };
 
   // Fetch all cases
@@ -29,9 +37,12 @@ export const useCases = () => {
       const url = `${API_URL}/cases${queryString ? `?${queryString}` : ''}`;
       console.log('📡 Fetching cases from:', url);
       
+      // ✅ FIX: Add mode: 'cors' and credentials
       const response = await fetch(url, {
         method: 'GET',
         ...getAuthHeader(),
+        mode: 'cors',
+        credentials: 'include',
       });
 
       console.log('📡 Response status:', response.status);
@@ -62,7 +73,11 @@ export const useCases = () => {
       // Try test route as fallback
       try {
         console.log('🔄 Trying test route...');
-        const testResponse = await fetch(`${API_URL}/test/cases`);
+        const testResponse = await fetch(`${API_URL}/test/cases`, {
+          method: 'GET',
+          mode: 'cors',
+          credentials: 'include',
+        });
         const testData = await testResponse.json();
         if (testData.success && testData.data) {
           console.log('✅ Test route loaded:', testData.data.length, 'cases');
@@ -86,6 +101,48 @@ export const useCases = () => {
     }
   }, []);
 
+  // ✅ NEW: Fetch a single case by ID
+  const fetchCaseById = useCallback(async (id) => {
+    setLoading(true);
+    setError(null);
+    try {
+      console.log(`📡 Fetching case by ID: ${id}`);
+      const url = `${API_URL}/cases/${id}`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        ...getAuthHeader(),
+        mode: 'cors',
+        credentials: 'include',
+      });
+
+      console.log('📡 Response status:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('📦 Case data:', data);
+
+      if (data.success && data.data) {
+        const formattedCase = {
+          ...data.data,
+          id: data.data.id || data.data._id
+        };
+        return { success: true, data: formattedCase };
+      }
+      
+      throw new Error(data.error || 'Failed to fetch case');
+    } catch (err) {
+      console.error('❌ Error fetching case:', err);
+      setError(err.message);
+      return { success: false, error: err.message };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   // Auto-fetch on mount
   useEffect(() => {
     console.log('🔄 useCases mounted - fetching cases...');
@@ -103,6 +160,8 @@ export const useCases = () => {
         method: 'POST',
         ...getAuthHeader(),
         body: JSON.stringify(caseData),
+        mode: 'cors',
+        credentials: 'include',
       });
 
       const result = await response.json();
@@ -153,6 +212,8 @@ export const useCases = () => {
         method: 'PUT',
         ...getAuthHeader(),
         body: JSON.stringify(cleanData),
+        mode: 'cors',
+        credentials: 'include',
       });
 
       console.log('📡 Response status:', response.status);
@@ -201,6 +262,8 @@ export const useCases = () => {
       const response = await fetch(`${API_URL}/cases/${id}`, {
         method: 'DELETE',
         ...getAuthHeader(),
+        mode: 'cors',
+        credentials: 'include',
       });
 
       const result = await response.json();
@@ -233,6 +296,8 @@ export const useCases = () => {
         method: 'PATCH',
         ...getAuthHeader(),
         body: JSON.stringify({ status }),
+        mode: 'cors',
+        credentials: 'include',
       });
 
       const result = await response.json();
@@ -331,6 +396,7 @@ export const useCases = () => {
     loading,
     error,
     fetchCases,
+    fetchCaseById, // ✅ NEW: Added this
     addCase,
     updateCase,
     deleteCase,
