@@ -19,7 +19,9 @@ import {
   FaBuilding,
   FaBookOpen,
   FaLandmark,
-  FaClock
+  FaClock,
+  FaIdCard,
+  FaMapMarkerAlt
 } from 'react-icons/fa';
 import { GiScales } from 'react-icons/gi';
 import CaseDetailModal from '../modals/CaseDetailModal';
@@ -77,10 +79,10 @@ const PartyEditModal = ({ isOpen, caseItem, onClose, onSave }) => {
     <>
       <div className="fixed inset-0 z-40 bg-[#1B262C]/60 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl border border-[#3282B8] shadow-2xl p-6 max-w-md w-full animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
+        <div className="bg-white rounded-2xl border border-[#040505] shadow-2xl p-6 max-w-md w-full animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
           <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#BBE1FA]/30">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#0F4C75] to-[#3282B8] flex items-center justify-center text-white">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-r from-[#161717eb] to-[#01060a] flex items-center justify-center text-white">
                 <FaUser className="text-lg" />
               </div>
               <div>
@@ -201,7 +203,7 @@ const PartyEditModal = ({ isOpen, caseItem, onClose, onSave }) => {
   );
 };
 
-// ===== MAIN CASE CARD - ONLY DATA FROM DETAIL MODAL =====
+// ===== MAIN CASE CARD =====
 const CaseCard = ({ 
   case: caseItem, 
   onView, 
@@ -210,7 +212,8 @@ const CaseCard = ({
   onDelete, 
   isNew = false,
   onRefresh,
-  onPartyUpdate
+  onPartyUpdate,
+  onDepartmentClick // ✅ New prop for department filter
 }) => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -221,9 +224,9 @@ const CaseCard = ({
 
   const getStatusConfig = (status) => {
     const configs = {
-      active: { label: 'Active', bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
-      pending: { label: 'Pending', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
-      closed: { label: 'Closed', bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200' },
+      active: { label: 'Active', bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200', dot: 'bg-green-500' },
+      pending: { label: 'Pending', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', dot: 'bg-amber-500' },
+      closed: { label: 'Closed', bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200', dot: 'bg-gray-500' },
     };
     return configs[status?.toLowerCase()] || configs.pending;
   };
@@ -248,83 +251,107 @@ const CaseCard = ({
     }
   };
 
-  // Get case title - matches detail modal
-  const getCaseTitle = () => {
-    if (caseItem.plaintiff && caseItem.defendant) {
-      return `${caseItem.plaintiff} VS ${caseItem.defendant}`;
+  // ===== DATA EXTRACTION =====
+  
+  // ✅ Get full case title (Plaintiff VS Defendant) - SIMPLE BLACK
+  const getFullCaseTitle = () => {
+    const plaintiff = caseItem.plaintiff || '';
+    const defendant = caseItem.defendant || '';
+    
+    if (plaintiff && defendant) {
+      return `${plaintiff} VS ${defendant}`;
     }
-    if (caseItem.caseTitle) {
-      return caseItem.caseTitle;
+    if (plaintiff) return plaintiff;
+    if (defendant) return defendant;
+    
+    // Fallback to caseTitle
+    if (caseItem.caseTitle && caseItem.caseTitle !== 'N/A' && caseItem.caseTitle !== '') {
+      let title = caseItem.caseTitle;
+      title = title.replace(/^#\d+\s*/, '');
+      title = title.replace(/^\d+-\s*/, '');
+      title = title.replace(/^Case\s*#\d+\s*/i, '');
+      return title.trim();
     }
-    if (caseItem.title) {
-      return caseItem.title;
+    if (caseItem.title && caseItem.title !== 'N/A' && caseItem.title !== '') {
+      let title = caseItem.title;
+      title = title.replace(/^#\d+\s*/, '');
+      title = title.replace(/^\d+-\s*/, '');
+      title = title.replace(/^Case\s*#\d+\s*/i, '');
+      return title.trim();
     }
     return 'Untitled Case';
   };
 
-  // Get party display
+  // Case Number - displayed separately as badge
+  const getCaseNumber = () => {
+    return caseItem.caseNumber || caseItem._id || caseItem.id || '';
+  };
+
+  // ✅ Department - from case data (replaces Case Type)
+  const getDepartment = () => {
+    return caseItem.department || 
+           caseItem.clientDepartment || 
+           caseItem.caseDepartment || 
+           '';
+  };
+
+  // ✅ Nature of Case
+  const getNatureOfCase = () => {
+    return caseItem.natureOfCase || caseItem.caseNature?.trial || '';
+  };
+
+  // Division
+  const getDivision = () => {
+    return caseItem.division || '';
+  };
+
+  // District
+  const getDistrict = () => {
+    return caseItem.district || '';
+  };
+
+  // Court Name
+  const getCourtName = () => {
+    return caseItem.nameOfCourt || caseItem.courtDetails?.courtName || caseItem.courtName || '';
+  };
+
+  // Next Hearing Date
+  const getNextHearing = () => {
+    return caseItem.nextDateOfHearing || caseItem.nextDate || caseItem.courtDetails?.nextDate || '';
+  };
+
+  // Party Name (for display)
   const getPartyDisplay = () => {
-    // Try plaintiff first, then defendant, then party fields
     const name = caseItem.plaintiff || caseItem.defendant || caseItem.partyName || caseItem.party;
-    if (!name || name === 'N/A' || name === 'NA') {
-      return null;
-    }
+    if (!name || name === 'N/A' || name === 'NA') return null;
     return name;
   };
 
+  // Party Type
   const getPartyType = () => {
     if (caseItem.plaintiff && caseItem.defendant) {
       return `${caseItem.plaintiff} vs ${caseItem.defendant}`;
     }
-    if (caseItem.partyType) {
-      return caseItem.partyType;
-    }
+    if (caseItem.partyType) return caseItem.partyType;
     return '';
   };
 
+  // Party Phone
   const getPartyPhone = () => {
     return caseItem.partyPhone || caseItem.phone || '';
   };
 
+  // Party Email
   const getPartyEmail = () => {
     return caseItem.partyEmail || caseItem.email || '';
   };
 
+  // Has Party Data
   const hasPartyData = () => {
     return getPartyDisplay() !== null || getPartyPhone() || getPartyEmail();
   };
 
-  // Get case number - matches detail modal
-  const getCaseNumber = () => {
-    return caseItem.caseNumber || caseItem._id || caseItem.id;
-  };
-
-  // Get next hearing date - matches detail modal
-  const getNextHearing = () => {
-    return caseItem.nextDateOfHearing || caseItem.nextDate || caseItem.courtDetails?.nextDate;
-  };
-
-  // Get court name - matches detail modal
-  const getCourtName = () => {
-    return caseItem.nameOfCourt || caseItem.courtDetails?.courtName || caseItem.courtName;
-  };
-
-  // Get nature of case - matches detail modal
-  const getNatureOfCase = () => {
-    return caseItem.natureOfCase || caseItem.caseNature?.trial;
-  };
-
-  // Get division - matches detail modal
-  const getDivision = () => {
-    return caseItem.division;
-  };
-
-  // Get district - matches detail modal
-  const getDistrict = () => {
-    return caseItem.district;
-  };
-
-  // Check if there are attachments - matches detail modal
+  // Attachments
   const hasAttachments = () => {
     return !!(caseItem.copyOfSummon || caseItem.copyOfPlaint || 
       caseItem.relevantDepartmentalRecord || caseItem.attachments?.copyOfSummon ||
@@ -332,18 +359,25 @@ const CaseCard = ({
       (caseItem.attachments && caseItem.attachments.length > 0));
   };
 
-  // Check if there are written statements - matches detail modal
+  // Written Statements
   const hasWrittenStatements = () => {
     return caseItem.writtenStatements && caseItem.writtenStatements.length > 0;
   };
 
+  // Law Officer
+  const hasLawOfficer = () => {
+    return !!(caseItem.lawOfficer && (caseItem.lawOfficer.name || caseItem.lawOfficer.type));
+  };
+
+  // Alternate Law Officer
+  const hasAlternateLawOfficer = () => {
+    return !!(caseItem.alternateLawOfficer && (caseItem.alternateLawOfficer.name || caseItem.alternateLawOfficer.type));
+  };
+
+  // Get document icon
   const getDocumentIcon = () => {
-    if (hasAttachments()) {
-      return <FaFilePdf className="text-red-500 text-[10px]" />;
-    }
-    if (hasWrittenStatements()) {
-      return <FaFileWord className="text-blue-500 text-[10px]" />;
-    }
+    if (hasAttachments()) return <FaFilePdf className="text-red-500 text-[10px]" />;
+    if (hasWrittenStatements()) return <FaFileWord className="text-blue-500 text-[10px]" />;
     return <FaFileAlt className="text-gray-300 text-[10px]" />;
   };
 
@@ -351,15 +385,9 @@ const CaseCard = ({
     const hasAttach = hasAttachments();
     const hasStatements = hasWrittenStatements();
     
-    if (hasAttach && hasStatements) {
-      return 'Has attachments & statements';
-    }
-    if (hasAttach) {
-      return 'Has attachments';
-    }
-    if (hasStatements) {
-      return `${caseItem.writtenStatements.length} statement(s)`;
-    }
+    if (hasAttach && hasStatements) return 'Has attachments & statements';
+    if (hasAttach) return 'Has attachments';
+    if (hasStatements) return `${caseItem.writtenStatements.length} statement(s)`;
     return 'No documents';
   };
 
@@ -368,6 +396,16 @@ const CaseCard = ({
     return 'text-gray-400';
   };
 
+  // Check if case has any meaningful data
+  const hasNoData = () => {
+    return !getFullCaseTitle() && 
+           !getCaseNumber() && 
+           !getPartyDisplay() &&
+           !getCourtName() &&
+           !getNextHearing();
+  };
+
+  // Handlers
   const handleDeleteClick = () => setShowDeleteConfirm(true);
   const handleConfirmDelete = () => {
     if (onDelete) onDelete(caseItem.id || caseItem._id);
@@ -389,16 +427,19 @@ const CaseCard = ({
     setTimeout(() => handleRefresh(), 300);
   };
 
-  const statusConfig = getStatusConfig(caseItem.status);
-
-  // Check if case has any meaningful data
-  const hasNoData = () => {
-    return !getCaseTitle() && 
-           !getCaseNumber() && 
-           !getPartyDisplay() &&
-           !getCourtName() &&
-           !getNextHearing();
+  // ✅ Handle department click - filter by department
+  const handleDepartmentClick = (e) => {
+    e.stopPropagation();
+    const dept = getDepartment();
+    if (dept && onDepartmentClick) {
+      onDepartmentClick(dept);
+    }
   };
+
+  const statusConfig = getStatusConfig(caseItem.status);
+  const fullCaseTitle = getFullCaseTitle();
+  const department = getDepartment();
+  const natureOfCase = getNatureOfCase();
 
   // If no data, show empty state
   if (hasNoData()) {
@@ -426,38 +467,42 @@ const CaseCard = ({
         <div className="h-1 bg-gradient-to-r from-[#1B262C] via-[#0F4C75] to-[#3282B8] flex-shrink-0"></div>
 
         <div className="p-4 flex-1 flex flex-col">
-          {/* ===== HEADER ===== */}
-          <div className="flex items-start justify-between mb-2 flex-shrink-0">
+          {/* ===== HEADER: Case Title (Simple Black) ===== */}
+          <div className="flex items-start justify-between mb-1 flex-shrink-0">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-[#1B262C] text-sm truncate">
-                  {getCaseTitle()}
-                </h3>
-                {isNew && (
-                  <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[8px] font-medium rounded-full border border-green-200 flex-shrink-0">
-                    NEW
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+              <h3 className="font-bold text-[#1B262C] text-base truncate">
+                {fullCaseTitle}
+              </h3>
+              
+              {/* ===== BADGES - Civil removed, Department added ===== */}
+              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                 {getCaseNumber() && (
                   <span className="text-[8px] text-gray-500 font-mono bg-gray-50 px-1.5 py-0.5 rounded border border-gray-200">
                     #{getCaseNumber()}
                   </span>
                 )}
-                {caseItem.caseType && (
+                {/* ✅ Department Badge - Clickable to filter (replaces Civil) */}
+                {department && (
+                  <button
+                    onClick={handleDepartmentClick}
+                    className="text-[8px] px-1.5 py-0.5 bg-[#3282B8]/10 text-[#0F4C75] rounded border border-[#3282B8]/20 font-medium hover:bg-[#3282B8]/20 hover:border-[#3282B8]/40 transition-all duration-200 cursor-pointer"
+                    title={`Filter by ${department}`}
+                  >
+                    {department}
+                  </button>
+                )}
+                {natureOfCase && (
                   <span className="text-[8px] px-1.5 py-0.5 bg-gray-50 rounded border border-gray-200 text-gray-600">
-                    {caseItem.caseType}
+                    {natureOfCase}
                   </span>
                 )}
-                {getNatureOfCase() && (
-                  <span className="text-[8px] px-1.5 py-0.5 bg-gray-50 rounded border border-gray-200 text-gray-600">
-                    {getNatureOfCase()}
-                  </span>
-                )}
-                {caseItem.status && (
-                  <span className={`text-[8px] px-2 py-0.5 rounded-full border font-medium ${statusConfig.bg} ${statusConfig.text} ${statusConfig.border}`}>
-                    ● {statusConfig.label}
+                <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[8px] font-medium ${statusConfig.bg} ${statusConfig.text} ${statusConfig.border}`}>
+                  <span className={`w-1 h-1 rounded-full ${statusConfig.dot}`}></span>
+                  {statusConfig.label}
+                </span>
+                {isNew && (
+                  <span className="px-1.5 py-0.5 bg-green-100 text-green-700 text-[8px] font-medium rounded-full border border-green-200 flex-shrink-0">
+                    NEW
                   </span>
                 )}
               </div>
@@ -469,13 +514,13 @@ const CaseCard = ({
             <div className="grid grid-cols-2 gap-1.5 mb-2 flex-shrink-0">
               {getDivision() && (
                 <div className={`bg-gray-50 rounded-lg p-1.5 border transition-all duration-200 ${isHovered ? 'border-[#3282B8]/30' : 'border-gray-200'}`}>
-                  <p className="text-[6px] text-gray-400 tracking-wider font-medium">Division</p>
+                  <p className="text-[6px] text-gray-400 tracking-wider font-medium">DIVISION</p>
                   <p className="text-[8px] font-semibold text-[#1B262C] truncate">{getDivision()}</p>
                 </div>
               )}
               {getDistrict() && (
                 <div className={`bg-gray-50 rounded-lg p-1.5 border transition-all duration-200 ${isHovered ? 'border-[#3282B8]/30' : 'border-gray-200'}`}>
-                  <p className="text-[6px] text-gray-400 tracking-wider font-medium">District</p>
+                  <p className="text-[6px] text-gray-400 tracking-wider font-medium">DISTRICT</p>
                   <p className="text-[8px] font-semibold text-[#1B262C] truncate">{getDistrict()}</p>
                 </div>
               )}
@@ -487,70 +532,48 @@ const CaseCard = ({
             <div className="grid grid-cols-2 gap-1.5 mb-2 flex-shrink-0">
               {getCourtName() && (
                 <div className={`bg-gray-50 rounded-lg p-1.5 border transition-all duration-200 ${isHovered ? 'border-[#3282B8]/30' : 'border-gray-200'}`}>
-                  <p className="text-[6px] text-gray-400 tracking-wider font-medium">Court</p>
+                  <p className="text-[6px] text-gray-400 tracking-wider font-medium">COURT</p>
                   <p className="text-[8px] font-semibold text-[#1B262C] truncate">{getCourtName()}</p>
                 </div>
               )}
               {getNextHearing() && (
                 <div className={`bg-gray-50 rounded-lg p-1.5 border transition-all duration-200 ${isHovered ? 'border-[#3282B8]/30' : 'border-gray-200'}`}>
-                  <p className="text-[6px] text-gray-400 tracking-wider font-medium">Next Hearing</p>
+                  <p className="text-[6px] text-gray-400 tracking-wider font-medium">NEXT HEARING</p>
                   <p className="text-[8px] font-semibold text-[#1B262C] truncate">{formatDate(getNextHearing())}</p>
                 </div>
               )}
             </div>
           )}
 
-          {/* ===== PARTY SECTION ===== */}
-          {hasPartyData() ? (
-            <div className={`flex items-center gap-2 p-2 rounded-lg border transition-all duration-200 mb-2 flex-shrink-0 ${
+          {/* ===== LAW OFFICER ===== */}
+          {(hasLawOfficer() || hasAlternateLawOfficer()) && (
+            <div className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border transition-all duration-200 mb-2 flex-shrink-0 ${
               isHovered ? 'bg-[#3282B8]/5 border-[#3282B8]/30' : 'bg-gray-50 border-gray-200'
             }`}>
-              <div className="w-7 h-7 rounded-full bg-gradient-to-r from-[#0F4C75] to-[#3282B8] flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0 shadow-md shadow-[#0F4C75]/20">
-                {getInitials(getPartyDisplay()) || '?'}
-              </div>
+              <FaUser className="text-[10px] text-[#3282B8] flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-[6px] text-gray-400 tracking-wider font-medium">Party</p>
-                <p className="text-[10px] text-[#1B262C] truncate font-medium">
-                  {getPartyDisplay() || 'Unnamed Party'}
-                </p>
-                {getPartyType() && (
-                  <p className="text-[7px] text-gray-500 truncate">
-                    {getPartyType()}
+                <p className="text-[6px] text-gray-400 tracking-wider font-medium">LAW OFFICER</p>
+                {hasLawOfficer() && (
+                  <p className="text-[8px] text-[#1B262C] truncate font-medium">
+                    {caseItem.lawOfficer?.name || caseItem.lawOfficer?.type || 'N/A'}
+                    {caseItem.lawOfficer?.designation && ` - ${caseItem.lawOfficer.designation}`}
+                  </p>
+                )}
+                {hasAlternateLawOfficer() && !hasLawOfficer() && (
+                  <p className="text-[8px] text-[#D97706] truncate font-medium">
+                    Alt: {caseItem.alternateLawOfficer?.name || caseItem.alternateLawOfficer?.type || 'N/A'}
                   </p>
                 )}
               </div>
-              {(getPartyPhone() || getPartyEmail()) && (
-                <div className="text-right flex-shrink-0 hidden sm:block">
-                  {getPartyPhone() && (
-                    <p className="text-[7px] text-gray-500 flex items-center gap-0.5 justify-end">
-                      <FaPhone className="text-[6px]" /> {getPartyPhone()}
-                    </p>
-                  )}
-                  {getPartyEmail() && (
-                    <p className="text-[7px] text-gray-500 flex items-center gap-0.5 justify-end">
-                      <FaEnvelope className="text-[6px]" /> {getPartyEmail()}
-                    </p>
-                  )}
-                </div>
+              {hasLawOfficer() && hasAlternateLawOfficer() && (
+                <span className="text-[6px] text-[#D97706] bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 flex-shrink-0">
+                  +Alt
+                </span>
               )}
-            </div>
-          ) : (
-            <div className={`flex items-center gap-2 p-2 rounded-lg border border-dashed transition-all duration-200 mb-2 flex-shrink-0 ${
-              isHovered ? 'border-[#3282B8]/30 bg-[#3282B8]/5' : 'border-gray-300 bg-gray-50'
-            }`}>
-              <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-[9px] font-bold flex-shrink-0">
-                <FaQuestionCircle className="text-xs" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[6px] text-gray-400 tracking-wider font-medium">Party</p>
-                <p className="text-[10px] text-gray-500 truncate italic">
-                  No party assigned
-                </p>
-              </div>
             </div>
           )}
 
-          {/* ===== DOCUMENT STATUS BAR ===== */}
+          {/* ===== DOCUMENT STATUS ===== */}
           <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg border transition-all duration-200 mb-2 flex-shrink-0 ${
             isHovered ? 'bg-[#3282B8]/5 border-[#3282B8]/30' : 'bg-gray-50 border-gray-200'
           }`}>
@@ -563,21 +586,17 @@ const CaseCard = ({
                 {getDocumentStatusText()}
               </span>
               <div className="flex items-center gap-0.5">
-                {(hasAttachments() || hasWrittenStatements()) ? (
-                  <>
-                    {hasAttachments() && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-red-400" title="Has attachments"></span>
-                    )}
-                    {hasWrittenStatements() && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400" title="Has written statements"></span>
-                    )}
-                  </>
-                ) : null}
+                {hasAttachments() && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-400" title="Has attachments"></span>
+                )}
+                {hasWrittenStatements() && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-400" title="Has written statements"></span>
+                )}
               </div>
             </div>
           </div>
 
-          {/* ===== FOOTER ===== */}
+          {/* ===== FOOTER: Actions ===== */}
           <div className="flex items-center justify-between pt-2 border-t border-gray-200 mt-auto flex-shrink-0">
             <div className="flex items-center gap-1">
               <button
@@ -610,25 +629,23 @@ const CaseCard = ({
             </div>
 
             <div className="flex items-center gap-1.5">
-              {caseItem.status && (
-                <select
-                  value={caseItem.status}
-                  onChange={(e) => handleStatusChange(e.target.value)}
-                  className={`text-[8px] px-2 py-1 bg-gray-50 border rounded-lg text-[#1B262C] focus:border-[#3282B8] outline-none cursor-pointer appearance-none pr-5 ${
-                    isHovered ? 'border-[#3282B8]/40' : 'border-gray-200'
-                  }`}
-                  style={{
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='4'%3E%3Cpath d='M0 0l3 4 3-4z' fill='%239CA3AF'/%3E%3C/svg%3E")`,
-                    backgroundRepeat: 'no-repeat',
-                    backgroundPosition: 'right 5px center',
-                    backgroundSize: '6px 4px',
-                  }}
-                >
-                  <option value="active">Active</option>
-                  <option value="pending">Pending</option>
-                  <option value="closed">Closed</option>
-                </select>
-              )}
+              <select
+                value={caseItem.status || 'active'}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                className={`text-[8px] px-2 py-1 bg-gray-50 border rounded-lg text-[#1B262C] focus:border-[#3282B8] outline-none cursor-pointer appearance-none pr-5 ${
+                  isHovered ? 'border-[#3282B8]/40' : 'border-gray-200'
+                }`}
+                style={{
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='4'%3E%3Cpath d='M0 0l3 4 3-4z' fill='%239CA3AF'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 5px center',
+                  backgroundSize: '6px 4px',
+                }}
+              >
+                <option value="active">Active</option>
+                <option value="pending">Pending</option>
+                <option value="closed">Closed</option>
+              </select>
 
               <button
                 onClick={(e) => {

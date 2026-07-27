@@ -206,21 +206,17 @@ const Dashboard = () => {
   }, []);
 
   // ✅ FIX: FETCH PROCEEDINGS WHEN CASE IS SELECTED
-  // ✅ FIXED: FETCH PROCEEDINGS WHEN CASE IS SELECTED
   useEffect(() => {
-  if (selectedCase) {
-    console.log('🔄 Case selected - fetching proceedings...');
-    const fetchData = async () => {
-      await fetchProceedings();
-      console.log('📊 Proceedings fetch completed');
-      // ✅ Wait for state to update
-      setTimeout(() => {
-        console.log('📊 Proceedings length after state update:', proceedings.length);
-      }, 100);
-    };
-    fetchData();
-  }
-}, [selectedCase]);
+    if (selectedCase) {
+      console.log('🔄 Case selected - fetching proceedings...');
+      const fetchData = async () => {
+        await fetchProceedings();
+        setModalKey(prev => prev + 1);
+        console.log('📊 Proceedings after fetch:', proceedings.length);
+      };
+      fetchData();
+    }
+  }, [selectedCase]);
 
   // Monitor proceedings changes
   useEffect(() => {
@@ -753,32 +749,111 @@ const Dashboard = () => {
   // ============================================
   // REGISTER GLOBAL HELPERS
   // ============================================
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.__handleRefresh = handleRefresh;
-      window.__handleAddProceeding = handleAddProceeding;
-      window.__handleAddComment = handleAddComment;
-      window.__handleAddParty = handleAddParty;
-      window.__handleFetchProceedings = fetchProceedings;
-      window.__handleRefreshSelectedCase = handleRefresh;
-      window.__handleFetchCaseById = fetchCases;
-      window.__proceedings = proceedings;
-    }
-    
-    return () => {
-      if (typeof window !== 'undefined') {
-        delete window.__handleRefresh;
-        delete window.__handleAddProceeding;
-        delete window.__handleAddComment;
-        delete window.__handleAddParty;
-        delete window.__handleFetchProceedings;
-        delete window.__handleRefreshSelectedCase;
-        delete window.__handleFetchCaseById;
-        delete window.__proceedings;
-      }
-    };
-  }, [handleRefresh, handleAddProceeding, handleAddComment, handleAddParty, fetchProceedings, fetchCases, proceedings]);
+  // ============================================
+// ✅ STORE DATA GLOBALLY (ADD THIS NEW BLOCK)
+// ============================================
+useEffect(() => {
+  if (proceedings.length > 0) {
+    window.__allProceedings = proceedings;
+    console.log('✅ Updated global allProceedings:', proceedings.length);
+  }
+}, [proceedings]);
 
+useEffect(() => {
+  if (comments.length > 0) {
+    window.__allComments = comments;
+    console.log('✅ Updated global allComments:', comments.length);
+  }
+}, [comments]);
+
+useEffect(() => {
+  if (parties.length > 0) {
+    window.__allParties = parties;
+    console.log('✅ Updated global allParties:', parties.length);
+  }
+}, [parties]);
+
+useEffect(() => {
+  if (cases.length > 0) {
+    window.__cases = cases;
+    console.log('✅ Updated global cases:', cases.length);
+  }
+}, [cases]);
+
+// ============================================
+// REGISTER GLOBAL HELPERS (REPLACE THIS)
+// ============================================
+useEffect(() => {
+  if (typeof window !== 'undefined') {
+    // Register functions
+    window.__handleRefresh = handleRefresh;
+    window.__handleAddProceeding = handleAddProceeding;
+    window.__handleAddComment = handleAddComment;
+    window.__handleAddParty = handleAddParty;
+    window.__handleFetchProceedings = fetchProceedings;
+    window.__handleFetchComments = fetchComments;      // ✅ ADDED
+    window.__handleFetchParties = fetchParties;        // ✅ ADDED
+    window.__handleRefreshSelectedCase = handleRefresh;
+    window.__handleFetchCaseById = fetchCases;
+    window.__handleView = (caseItem) => {
+      console.log('👁️ Global handleView called for case:', caseItem?._id || caseItem?.id);
+      setSelectedCase(caseItem);
+    };
+    
+    // Store data globally
+    window.__proceedings = proceedings;
+    window.__comments = comments;                      // ✅ ADDED
+    window.__parties = parties;                        // ✅ ADDED
+    window.__cases = cases;                            // ✅ ADDED
+    window.__allProceedings = proceedings;            // ✅ ADDED
+    window.__allComments = comments;                  // ✅ ADDED
+    window.__allParties = parties;                    // ✅ ADDED
+    window.__selectedCase = selectedCase;              // ✅ ADDED
+    
+    console.log('✅ Global helpers registered:');
+    console.log('  - __allProceedings:', window.__allProceedings?.length || 0);
+    console.log('  - __allComments:', window.__allComments?.length || 0);
+    console.log('  - __allParties:', window.__allParties?.length || 0);
+    console.log('  - __cases:', window.__cases?.length || 0);
+  }
+  
+  return () => {
+    if (typeof window !== 'undefined') {
+      delete window.__handleRefresh;
+      delete window.__handleAddProceeding;
+      delete window.__handleAddComment;
+      delete window.__handleAddParty;
+      delete window.__handleFetchProceedings;
+      delete window.__handleFetchComments;
+      delete window.__handleFetchParties;
+      delete window.__handleRefreshSelectedCase;
+      delete window.__handleFetchCaseById;
+      delete window.__handleView;
+      delete window.__proceedings;
+      delete window.__comments;
+      delete window.__parties;
+      delete window.__cases;
+      delete window.__allProceedings;
+      delete window.__allComments;
+      delete window.__allParties;
+      delete window.__selectedCase;
+    }
+  };
+}, [
+  handleRefresh, 
+  handleAddProceeding, 
+  handleAddComment, 
+  handleAddParty, 
+  fetchProceedings, 
+  fetchComments, 
+  fetchParties, 
+  fetchCases, 
+  proceedings, 
+  comments, 
+  parties, 
+  cases,
+  selectedCase
+]);
   // ============================================
   // RENDER REFERENCE CASES
   // ============================================

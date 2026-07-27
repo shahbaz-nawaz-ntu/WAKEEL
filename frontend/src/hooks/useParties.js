@@ -1,4 +1,4 @@
-// src/hooks/useParties.js
+// frontend/src/hooks/useParties.js
 import { useState, useCallback, useEffect } from 'react';
 import toast from 'react-hot-toast';
 
@@ -52,11 +52,15 @@ const useParties = () => {
       const formatted = partiesData.map(item => ({
         ...item,
         id: item.id || item._id,
-        caseId: item.caseId?._id || item.caseId || item.case
+        caseId: item.caseId || item.case_id || item.case || null
       }));
       
       setParties(formatted);
-      console.log('✅ Parties loaded:', formatted.length);
+      
+      // ✅ Store globally
+      window.__allParties = formatted;
+      console.log('✅ Parties loaded and stored globally:', formatted.length);
+      
       return { success: true, data: formatted };
       
     } catch (err) {
@@ -92,7 +96,7 @@ const useParties = () => {
       const formatted = {
         ...newParty,
         id: newParty.id || newParty._id,
-        caseId: newParty.caseId?._id || newParty.caseId || data.caseId
+        caseId: newParty.caseId || newParty.case_id || data.caseId || null
       };
       
       setParties(prev => {
@@ -102,6 +106,9 @@ const useParties = () => {
         }
         return [formatted, ...prev];
       });
+      
+      // ✅ Update global
+      window.__allParties = [formatted, ...(window.__allParties || [])];
       
       console.log('✅ Party added:', formatted);
       toast.success('Party added! 👤');
@@ -137,10 +144,16 @@ const useParties = () => {
       const formatted = {
         ...updated,
         id: updated.id || updated._id,
-        caseId: updated.caseId?._id || updated.caseId
+        caseId: updated.caseId || updated.case_id || null
       };
       
       setParties(prev => prev.map(p => (p.id === id || p._id === id) ? formatted : p));
+      
+      // ✅ Update global
+      window.__allParties = window.__allParties?.map(p => 
+        (p.id === id || p._id === id) ? formatted : p
+      ) || [];
+      
       console.log('✅ Party updated:', formatted);
       toast.success('Party updated! 📝');
       return { success: true, data: formatted };
@@ -169,6 +182,12 @@ const useParties = () => {
 
       if (result.success !== false) {
         setParties(prev => prev.filter(p => p.id !== id && p._id !== id));
+        
+        // ✅ Update global
+        window.__allParties = window.__allParties?.filter(p => 
+          p.id !== id && p._id !== id
+        ) || [];
+        
         console.log('✅ Party deleted:', id);
         toast.success('Party deleted! 🗑️');
         return { success: true };

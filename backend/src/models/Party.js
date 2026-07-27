@@ -2,8 +2,14 @@
 import mongoose from 'mongoose';
 
 const partySchema = new mongoose.Schema({
+  caseId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Case',
+    required: false
+  },
   type: {
     type: String,
+    required: [true, 'Please provide party type'],
     enum: [
       'Appellant(s)',
       'Defendant(s)',
@@ -13,13 +19,11 @@ const partySchema = new mongoose.Schema({
       'Applicant(s)',
       'Complainant(s)',
       'Accused'
-    ],
-    required: [true, 'Please provide party type']
+    ]
   },
   name: {
     type: String,
-    required: [true, 'Please provide party name'],
-    trim: true
+    required: [true, 'Please provide party name']
   },
   phone: {
     type: String,
@@ -44,13 +48,12 @@ const partySchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: [true, 'User ID is required']  // ✅ Make sure this is required
+    required: false  // ✅ CHANGE: required: true se false karein
   }
 }, {
   timestamps: true
 });
 
-// Convert _id to id for frontend
 partySchema.set('toJSON', {
   transform: function(doc, ret) {
     ret.id = ret._id.toString();

@@ -22,4 +22,5 @@ router.route('/:id')
   .put(protect, updateComment)
   .delete(protect, deleteComment);
 
+// ✅ YEH LINE IMPORTANT HAI - export default
 export default router;

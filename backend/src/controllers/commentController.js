@@ -1,4 +1,3 @@
-
 // backend/src/controllers/commentController.js
 import Comment from '../models/Comment.js';
 import Case from '../models/Case.js';
@@ -50,10 +49,11 @@ export const getCommentsByCase = async (req, res) => {
   }
 };
 
-// ✅ CREATE COMMENT
+// ✅ CREATE COMMENT - FIXED
 export const createComment = async (req, res) => {
   try {
     console.log('📝 Creating comment with data:', req.body);
+    console.log('👤 User:', req.user);
     
     const { 
       caseId, 
@@ -90,7 +90,7 @@ export const createComment = async (req, res) => {
       clientDepartments: clientDepartments || '',
       attachments: attachments || [],
       status: status || 'Pending',
-      userId: req.user._id,
+      userId: req.user?._id || null,  // ✅ FIX: req.user available hai toh use karein, nahi toh null
       date: date || new Date()
     });
     

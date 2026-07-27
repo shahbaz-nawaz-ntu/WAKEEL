@@ -6,7 +6,6 @@ export const getParties = async (req, res) => {
   try {
     console.log('📋 Fetching parties for user:', req.user?._id);
     
-    // If no user, return empty array
     if (!req.user) {
       return res.status(401).json({
         success: false,
@@ -32,13 +31,12 @@ export const getParties = async (req, res) => {
   }
 };
 
-// ✅ CREATE PARTY - FIXED
-export const createParty = async (req, res) => {
+// ✅ GET PARTIES BY CASE
+export const getPartiesByCase = async (req, res) => {
   try {
-    console.log('📝 Creating party with data:', req.body);
-    console.log('👤 User:', req.user);
+    const { caseId } = req.params;
+    console.log(`📋 Fetching parties for case: ${caseId}`);
     
-    // Check if user exists
     if (!req.user) {
       return res.status(401).json({
         success: false,
@@ -46,9 +44,41 @@ export const createParty = async (req, res) => {
       });
     }
     
-    const { type, name, phone, email, cnic, address, createdBy } = req.body;
+    const parties = await Party.find({ 
+      caseId, 
+      userId: req.user._id 
+    }).sort({ createdAt: -1 });
     
-    // Validate required fields
+    console.log(`✅ Found ${parties.length} parties for case`);
+    
+    res.status(200).json({
+      success: true,
+      data: parties
+    });
+  } catch (error) {
+    console.error('❌ Error fetching parties by case:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+// ✅ CREATE PARTY
+export const createParty = async (req, res) => {
+  try {
+    console.log('📝 Creating party with data:', req.body);
+    console.log('👤 User:', req.user);
+    
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized - User not found'
+      });
+    }
+    
+    const { type, name, phone, email, cnic, address, createdBy, caseId } = req.body;
+    
     if (!type || !name) {
       return res.status(400).json({
         success: false,
@@ -56,7 +86,6 @@ export const createParty = async (req, res) => {
       });
     }
     
-    // Create party with userId from authenticated user
     const party = new Party({
       type,
       name,
@@ -65,7 +94,8 @@ export const createParty = async (req, res) => {
       cnic: cnic || '-',
       address: address || '-',
       createdBy: createdBy || 'Current User',
-      userId: req.user._id  // ✅ Use authenticated user's ID
+      userId: req.user?._id || null,  // ✅ FIX: req.user available hai toh use karein
+      caseId: caseId || null
     });
     
     await party.save();
@@ -106,7 +136,7 @@ export const updateParty = async (req, res) => {
       });
     }
     
-    const { type, name, phone, email, cnic, address, createdBy } = req.body;
+    const { type, name, phone, email, cnic, address, createdBy, caseId } = req.body;
     
     if (type) party.type = type;
     if (name) party.name = name;
@@ -115,6 +145,7 @@ export const updateParty = async (req, res) => {
     if (cnic) party.cnic = cnic;
     if (address) party.address = address;
     if (createdBy) party.createdBy = createdBy;
+    if (caseId !== undefined) party.caseId = caseId;
     
     await party.save();
     console.log('✅ Party updated:', party);

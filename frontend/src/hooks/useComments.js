@@ -49,14 +49,19 @@ const useComments = () => {
         commentsData = data.data;
       }
 
+      // ✅ FIX: Direct caseId - no nesting
       const formatted = commentsData.map(item => ({
         ...item,
         id: item.id || item._id,
-        caseId: item.caseId?._id || item.caseId || item.case
+        caseId: item.caseId || item.case_id || item.case  // ✅ Direct caseId
       }));
       
       setComments(formatted);
-      console.log('✅ Comments loaded:', formatted.length);
+      
+      // ✅ Store globally
+      window.__allComments = formatted;
+      console.log('✅ Comments loaded and stored globally:', formatted.length);
+      
       return { success: true, data: formatted };
       
     } catch (err) {
@@ -92,7 +97,7 @@ const useComments = () => {
       const formatted = {
         ...newComment,
         id: newComment.id || newComment._id,
-        caseId: newComment.caseId?._id || newComment.caseId || data.caseId
+        caseId: newComment.caseId || newComment.case_id || data.caseId  // ✅ Direct caseId
       };
       
       setComments(prev => {
@@ -102,6 +107,9 @@ const useComments = () => {
         }
         return [formatted, ...prev];
       });
+      
+      // ✅ Update global
+      window.__allComments = [formatted, ...(window.__allComments || [])];
       
       console.log('✅ Comment added:', formatted);
       toast.success('Comment added! 💬');
@@ -137,10 +145,16 @@ const useComments = () => {
       const formatted = {
         ...updated,
         id: updated.id || updated._id,
-        caseId: updated.caseId?._id || updated.caseId
+        caseId: updated.caseId || updated.case_id  // ✅ Direct caseId
       };
       
       setComments(prev => prev.map(c => (c.id === id || c._id === id) ? formatted : c));
+      
+      // ✅ Update global
+      window.__allComments = window.__allComments?.map(c => 
+        (c.id === id || c._id === id) ? formatted : c
+      ) || [];
+      
       console.log('✅ Comment updated:', formatted);
       toast.success('Comment updated! 📝');
       return { success: true, data: formatted };
@@ -169,6 +183,12 @@ const useComments = () => {
 
       if (result.success !== false) {
         setComments(prev => prev.filter(c => c.id !== id && c._id !== id));
+        
+        // ✅ Update global
+        window.__allComments = window.__allComments?.filter(c => 
+          c.id !== id && c._id !== id
+        ) || [];
+        
         console.log('✅ Comment deleted:', id);
         toast.success('Comment deleted! 🗑️');
         return { success: true };

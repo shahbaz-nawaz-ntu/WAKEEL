@@ -18,15 +18,6 @@ const commentSchema = new mongoose.Schema({
   },
   requestToClientDepartment: {
     type: String,
-    enum: [
-      'Attendance of departmental representative required in court.',
-      'Attendance of departmental representative for cross-examination of witnesses.',
-      'Attendance of Departmental representatives for oral evidence.',
-      'In case of transfer/leave/retirement etc. Alternate Departmental Representative.',
-      'Provision of record and assistance from Departmental Representative for arguments.',
-      'Provision of record for documentary evidence. (time limitation)',
-      'Provision of record for preparation of written statement/ reply. (time limitation)'
-    ],
     default: ''
   },
   clientDepartments: {
@@ -39,13 +30,12 @@ const commentSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['Pending', 'In Progress', 'Completed', 'Closed'],
     default: 'Pending'
   },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: false  // ✅ CHANGE: required: true se false karein
   },
   date: {
     type: Date,
@@ -55,7 +45,6 @@ const commentSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Convert _id to id for frontend
 commentSchema.set('toJSON', {
   transform: function(doc, ret) {
     ret.id = ret._id.toString();

@@ -1,1332 +1,1397 @@
-// src/components/modals/CaseDetailModal.jsx
-import React, { useState } from 'react';
-import { FaTimes, FaEdit, FaTrash, FaUser, FaCalendarAlt, FaBuilding, FaTag, FaGavel, FaFileAlt, FaDownload, FaPrint, FaSave, FaPlus, FaPlusCircle, FaComment, FaUsers, FaInfoCircle, FaClock, FaChevronDown, FaChevronUp, FaEye, FaFile, FaCalendarCheck, FaClipboardList, FaBookmark } from 'react-icons/fa';
-import { GiJusticeStar } from 'react-icons/gi';
+// src/components/modals/AddCaseModal.jsx
+import React, { useState, useRef, useEffect } from 'react';
 import toast from 'react-hot-toast';
+import { 
+  FaTimes, FaPaperclip, FaFileAlt, FaUpload, FaTrash, FaPlus,
+  FaFilePdf, FaFileWord, FaFileExcel, FaFileImage, FaFile,
+  FaEdit, FaEye, FaDownload, FaPrint, FaUser, FaBuilding, FaPhone, FaMapMarkerAlt,
+  FaChevronDown
+} from 'react-icons/fa';
 
-const CaseDetailModal = ({
-  isOpen,
-  case: caseData,
-  onClose,
-  onStatusChange,
-  onEdit,
-  onDelete,
-  onDeleteComplete,
-  onRefresh,
-  // ===== COMMENTS PROPS =====
-  comments = [],
-  commentsLoading = false,
-  onAddComment,
-  onEditComment,
-  onDeleteComment,
-  openEditCommentModal,
-  openDeleteCommentConfirm,
-  showAddCommentModal,
-  setShowAddCommentModal,
-  // ===== PARTIES PROPS =====
-  parties = [],
-  partiesLoading = false,
-  onAddParty,
-  onEditParty,
-  onDeleteParty,
-  openEditPartyModal,
-  openDeletePartyConfirm,
-  showAddPartyModal,
-  setShowAddPartyModal,
-  // ===== PROCEEDINGS PROPS =====
-  proceedings = [],
-  proceedingsLoading = false,
-  onAddProceeding,
-  onUpdateProceeding,
-  onDeleteProceeding,
-  openEditProceedingForm,
-  openDeleteConfirm,
-  openProceedingDetail,
-  showProceedingForm,
-  setShowProceedingForm,
-  proceedingFormData,
-  handleProceedingFormChange,
-  handleProceedingSubmit,
-  showEditProceedingForm,
-  setShowEditProceedingForm,
-  editingProceeding,
-  editProceedingFormData,
-  handleEditProceedingFormChange,
-  handleEditProceedingSubmit,
-  statusOptions,
-  customStatus,
-  setCustomStatus,
-  showCustomStatusInput,
-  setShowCustomStatusInput,
-  addCustomStatus,
-  editStatusOptions,
-  editCustomStatus,
-  setEditCustomStatus,
-  showEditCustomStatusInput,
-  setShowEditCustomStatusInput,
-  addEditCustomStatus,
-}) => {
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isStatusUpdating, setIsStatusUpdating] = useState(false);
-  const [activeTab, setActiveTab] = useState('details');
-  const [isRefreshing, setIsRefreshing] = useState(false);
+// ===== COMBOBOX COMPONENT =====
+const Combobox = ({ options, value, onChange, placeholder, label, required, className = "" }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filteredOptions, setFilteredOptions] = useState(options);
+  const inputRef = useRef(null);
+  const dropdownRef = useRef(null);
 
-  // Comment form state
-  const [commentFormData, setCommentFormData] = useState({
-    caseId: '',
-    commentedBy: '',
-    remarks: '',
-    requestToClientDepartment: '',
-    clientDepartments: '',
-    attachments: [],
-    status: 'Pending',
-    date: new Date().toISOString().split('T')[0]
-  });
-
-  // Party form state
-  const [partyFormData, setPartyFormData] = useState({
-    type: '',
-    name: '',
-    phone: '',
-    email: '',
-    cnic: '',
-    address: '',
-    createdBy: '',
-  });
-
-  if (!isOpen || !caseData) return null;
-
-  const caseId = caseData.id || caseData._id;
-
-  // Filter comments for this case
-  const caseComments = comments.filter(c => c.caseId === caseId);
-  // Filter parties for this case
-  const caseParties = parties.filter(p => p.caseId === caseId);
-  // Filter proceedings for this case
-  const caseProceedings = proceedings.filter(p => p.caseId === caseId);
-
-  const getStatusColor = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'active': return 'bg-[#22C55E]/10 text-[#22C55E] border-[#22C55E]/20';
-      case 'pending': return 'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20';
-      case 'closed': return 'bg-[#6B7280]/10 text-[#6B7280] border-[#6B7280]/20';
-      default: return 'bg-[#3282B8]/10 text-[#0F4C75] border-[#3282B8]/20';
+  useEffect(() => {
+    if (searchTerm) {
+      setFilteredOptions(
+        options.filter(opt => 
+          opt.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      );
+    } else {
+      setFilteredOptions(options);
     }
-  };
+  }, [searchTerm, options]);
 
-  const getStatusIcon = (status) => {
-    switch (status?.toLowerCase()) {
-      case 'active': return '🟢';
-      case 'pending': return '🟡';
-      case 'closed': return '🔴';
-      default: return '⚪';
-    }
-  };
-
-  // ============================================
-  // REFRESH DATA
-  // ============================================
-  const refreshData = async () => {
-    if (onRefresh) {
-      setIsRefreshing(true);
-      try {
-        await onRefresh();
-        console.log('✅ Data refreshed');
-      } catch (error) {
-        console.error('❌ Error refreshing data:', error);
-      } finally {
-        setIsRefreshing(false);
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
       }
-    }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleInputChange = (e) => {
+    const val = e.target.value;
+    setSearchTerm(val);
+    onChange(val);
+    setIsOpen(true);
   };
 
-  // ============================================
-  // STATUS HANDLER
-  // ============================================
-  const handleStatusChange = async (newStatus) => {
-    if (!caseId) return;
-    setIsStatusUpdating(true);
-    try {
-      await onStatusChange(caseId, newStatus);
-      await refreshData();
-      toast.success(`Status updated to ${newStatus}`);
-    } catch (error) {
-      toast.error('Failed to update status');
-    } finally {
-      setIsStatusUpdating(false);
-    }
+  const handleSelectOption = (option) => {
+    onChange(option);
+    setSearchTerm(option);
+    setIsOpen(false);
   };
 
-  // ============================================
-  // DELETE HANDLER
-  // ============================================
-  const handleDelete = async () => {
-    if (!caseId) return;
-    setIsDeleting(true);
-    try {
-      await onDelete(caseId);
-      toast.success('Case deleted successfully');
-      setShowDeleteConfirm(false);
-      if (onDeleteComplete) onDeleteComplete();
-    } catch (error) {
-      toast.error('Failed to delete case');
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const handleEdit = () => {
-    if (onEdit) onEdit(caseData);
-  };
-
-  // ============================================
-  // PROCEEDING SUBMIT HANDLER - FIXED
-  // ============================================
-  const handleProceedingSubmitWrapper = async (e) => {
-    e.preventDefault();
-    
-    if (!proceedingFormData.caseId) {
-      toast.error('Please select a case');
-      return;
-    }
-    
-    if (!proceedingFormData.createdBy) {
-      toast.error('Please enter your name');
-      return;
-    }
-    if (!proceedingFormData.progress) {
-      toast.error('Please enter progress details');
-      return;
-    }
-    if (!proceedingFormData.nextHearingDate) {
-      toast.error('Please select next hearing date');
-      return;
-    }
-    if (!proceedingFormData.status) {
-      toast.error('Please select status');
-      return;
-    }
-
-    try {
-      const proceedingData = {
-        caseId: proceedingFormData.caseId,
-        createdBy: proceedingFormData.createdBy,
-        progress: proceedingFormData.progress,
-        nextHearingDate: proceedingFormData.nextHearingDate,
-        status: proceedingFormData.status,
-        date: proceedingFormData.date || new Date().toISOString().split('T')[0],
-        attachment: proceedingFormData.attachment || null
-      };
-
-      console.log('📤 Submitting proceeding:', proceedingData);
-      
-      if (onAddProceeding) {
-        const result = await onAddProceeding(proceedingData);
-        console.log('✅ Proceeding added:', result);
-        
-        // Close the form
-        setShowProceedingForm(false);
-        
-        // Refresh data
-        await refreshData();
-        
-        toast.success('Proceeding added successfully!');
-      } else {
-        console.error('❌ onAddProceeding is not defined');
-        toast.error('Cannot add proceeding: function not available');
-      }
-    } catch (error) {
-      console.error('❌ Error adding proceeding:', error);
-      toast.error('Failed to add proceeding');
-    }
-  };
-
-  // ============================================
-  // EDIT PROCEEDING SUBMIT HANDLER - FIXED
-  // ============================================
-  const handleEditProceedingSubmitWrapper = async (e) => {
-    e.preventDefault();
-    
-    if (!editProceedingFormData.createdBy) {
-      toast.error('Please enter your name');
-      return;
-    }
-    if (!editProceedingFormData.progress) {
-      toast.error('Please enter progress details');
-      return;
-    }
-    if (!editProceedingFormData.nextHearingDate) {
-      toast.error('Please select next hearing date');
-      return;
-    }
-    if (!editProceedingFormData.status) {
-      toast.error('Please select status');
-      return;
-    }
-
-    const id = editingProceeding?.id || editingProceeding?._id;
-    if (!id) {
-      toast.error('Proceeding ID not found');
-      return;
-    }
-
-    try {
-      if (onUpdateProceeding) {
-        await onUpdateProceeding(id, editProceedingFormData);
-        setShowEditProceedingForm(false);
-        setEditingProceeding(null);
-        await refreshData();
-        toast.success('Proceeding updated successfully!');
-      } else {
-        console.error('❌ onUpdateProceeding is not defined');
-        toast.error('Cannot update proceeding: function not available');
-      }
-    } catch (error) {
-      console.error('❌ Error updating proceeding:', error);
-      toast.error('Failed to update proceeding');
-    }
-  };
-
-  // ============================================
-  // ADD COMMENT HANDLER - FIXED
-  // ============================================
-  const handleAddCommentWrapper = async () => {
-    if (!commentFormData.commentedBy) {
-      toast.error('Please enter your name');
-      return;
-    }
-
-    try {
-      const commentData = {
-        caseId: caseId,
-        commentedBy: commentFormData.commentedBy,
-        remarks: commentFormData.remarks || '',
-        requestToClientDepartment: commentFormData.requestToClientDepartment || '',
-        clientDepartments: commentFormData.clientDepartments || '',
-        attachments: commentFormData.attachments || [],
-        status: commentFormData.status,
-        date: commentFormData.date || new Date().toISOString().split('T')[0]
-      };
-
-      console.log('📤 Submitting comment:', commentData);
-      
-      if (onAddComment) {
-        await onAddComment(commentData);
-        setShowAddCommentModal(false);
-        await refreshData();
-        toast.success('Comment added successfully!');
-      } else {
-        console.error('❌ onAddComment is not defined');
-        toast.error('Cannot add comment: function not available');
-      }
-    } catch (error) {
-      console.error('❌ Error adding comment:', error);
-      toast.error('Failed to add comment');
-    }
-  };
-
-  // ============================================
-  // ADD PARTY HANDLER - FIXED
-  // ============================================
-  const handleAddPartyWrapper = async () => {
-    if (!partyFormData.type) {
-      toast.error('Please select party type');
-      return;
-    }
-    if (!partyFormData.name) {
-      toast.error('Please enter party name');
-      return;
-    }
-
-    try {
-      const partyData = {
-        caseId: caseId,
-        type: partyFormData.type,
-        name: partyFormData.name,
-        phone: partyFormData.phone || '-',
-        email: partyFormData.email || '-',
-        cnic: partyFormData.cnic || '-',
-        address: partyFormData.address || '-',
-        createdBy: partyFormData.createdBy || 'Current User'
-      };
-
-      console.log('📤 Submitting party:', partyData);
-      
-      if (onAddParty) {
-        await onAddParty(partyData);
-        setShowAddPartyModal(false);
-        await refreshData();
-        toast.success('Party added successfully!');
-      } else {
-        console.error('❌ onAddParty is not defined');
-        toast.error('Cannot add party: function not available');
-      }
-    } catch (error) {
-      console.error('❌ Error adding party:', error);
-      toast.error('Failed to add party');
-    }
-  };
-
-  // ============================================
-  // RENDER CASE DETAILS TAB
-  // ============================================
-  const renderDetails = () => (
-    <div className="space-y-6">
-      {/* Case Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-mono text-[#6B7280] bg-[#F0F4F8] px-3 py-1 rounded-lg">
-              #{caseData.caseNumber || 'N/A'}
-            </span>
-            <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(caseData.status)}`}>
-              {getStatusIcon(caseData.status)} {caseData.status || 'Unknown'}
-            </span>
-          </div>
-          <h2 className="text-xl font-bold text-[#1B262C] mt-2">{caseData.caseTitle || caseData.title || 'Untitled Case'}</h2>
-          <p className="text-sm text-[#6B7280]">Created: {caseData.date ? new Date(caseData.date).toLocaleDateString() : 'N/A'}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleEdit}
-            className="px-4 py-2 bg-[#F59E0B] text-white rounded-xl text-sm font-medium hover:bg-[#D97706] transition-all duration-200 flex items-center gap-2"
-          >
-            <FaEdit className="text-sm" /> Edit
-          </button>
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            className="px-4 py-2 bg-red-500 text-white rounded-xl text-sm font-medium hover:bg-red-600 transition-all duration-200 flex items-center gap-2"
-          >
-            <FaTrash className="text-sm" /> Delete
-          </button>
-          <button
-            onClick={onClose}
-            className="p-2 text-[#6B7280] hover:text-[#1B262C] hover:bg-[#F0F4F8] rounded-xl transition-all duration-200"
-          >
-            <FaTimes className="text-xl" />
-          </button>
-        </div>
-      </div>
-
-      {/* Status Update */}
-      <div className="flex items-center gap-3 p-3 bg-[#F0F4F8] rounded-xl">
-        <span className="text-sm font-medium text-[#6B7280]">Update Status:</span>
-        <select
-          value={caseData.status || ''}
-          onChange={(e) => handleStatusChange(e.target.value)}
-          disabled={isStatusUpdating}
-          className="px-3 py-1.5 bg-white border border-[#BBE1FA] rounded-lg text-sm text-[#1B262C] focus:outline-none focus:ring-2 focus:ring-[#3282B8] transition-all duration-200"
-        >
-          <option value="active">Active</option>
-          <option value="pending">Pending</option>
-          <option value="closed">Closed</option>
-        </select>
-        {isStatusUpdating && <span className="text-xs text-[#6B7280]">Updating...</span>}
-      </div>
-
-      {/* Case Info Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4">
-          <div className="flex items-start gap-3">
-            <FaBuilding className="text-[#3282B8] text-sm mt-0.5" />
-            <div>
-              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Department</p>
-              <p className="text-sm text-[#1B262C] font-medium">{caseData.department || 'N/A'}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4">
-          <div className="flex items-start gap-3">
-            <FaTag className="text-[#3282B8] text-sm mt-0.5" />
-            <div>
-              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Board</p>
-              <p className="text-sm text-[#1B262C] font-medium">{caseData.board || caseData.courtName || 'N/A'}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4">
-          <div className="flex items-start gap-3">
-            <FaUser className="text-[#3282B8] text-sm mt-0.5" />
-            <div>
-              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Plaintiff</p>
-              <p className="text-sm text-[#1B262C] font-medium">{caseData.plaintiff || 'N/A'}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4">
-          <div className="flex items-start gap-3">
-            <FaUser className="text-[#3282B8] text-sm mt-0.5" />
-            <div>
-              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Defendant</p>
-              <p className="text-sm text-[#1B262C] font-medium">{caseData.defendant || 'N/A'}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4">
-          <div className="flex items-start gap-3">
-            <FaCalendarAlt className="text-[#3282B8] text-sm mt-0.5" />
-            <div>
-              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Next Hearing</p>
-              <p className="text-sm text-[#1B262C] font-medium">{caseData.nextDateOfHearing || caseData.nextHearing || caseData.nexthearing || 'N/A'}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4">
-          <div className="flex items-start gap-3">
-            <FaGavel className="text-[#3282B8] text-sm mt-0.5" />
-            <div>
-              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Case Type</p>
-              <p className="text-sm text-[#1B262C] font-medium">{caseData.caseType || caseData.natureOfCase || 'Civil'}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Law Officer */}
-      {caseData.lawOfficer && (
-        <div className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4">
-          <h4 className="text-sm font-semibold text-[#0F4C75] mb-3 flex items-center gap-2">
-            <FaUser className="text-sm" /> Law Officer
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Name</p>
-              <p className="text-sm text-[#1B262C]">{caseData.lawOfficer.name || 'N/A'}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Designation</p>
-              <p className="text-sm text-[#1B262C]">{caseData.lawOfficer.designation || 'N/A'}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Office</p>
-              <p className="text-sm text-[#1B262C]">{caseData.lawOfficer.officeAddress || 'N/A'}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Contact</p>
-              <p className="text-sm text-[#1B262C]">{caseData.lawOfficer.cellNumber || caseData.lawOfficer.officialNumber || 'N/A'}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Alternate Law Officer */}
-      {caseData.alternateLawOfficer && caseData.alternateLawOfficer.name && (
-        <div className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4">
-          <h4 className="text-sm font-semibold text-[#0F4C75] mb-3 flex items-center gap-2">
-            <FaUser className="text-sm" /> Alternate Law Officer
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Name</p>
-              <p className="text-sm text-[#1B262C]">{caseData.alternateLawOfficer.name || 'N/A'}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Designation</p>
-              <p className="text-sm text-[#1B262C]">{caseData.alternateLawOfficer.designation || 'N/A'}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Office</p>
-              <p className="text-sm text-[#1B262C]">{caseData.alternateLawOfficer.officeAddress || 'N/A'}</p>
-            </div>
-            <div>
-              <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Contact</p>
-              <p className="text-sm text-[#1B262C]">{caseData.alternateLawOfficer.cellNumber || caseData.alternateLawOfficer.officialNumber || 'N/A'}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Written Statements */}
-      {caseData.writtenStatements && caseData.writtenStatements.length > 0 && (
-        <div className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4">
-          <h4 className="text-sm font-semibold text-[#0F4C75] mb-3 flex items-center gap-2">
-            <FaFileAlt className="text-sm" /> Written Statements ({caseData.writtenStatements.length})
-          </h4>
-          <div className="space-y-2">
-            {caseData.writtenStatements.map((statement, index) => (
-              <div key={index} className="flex items-center justify-between p-2 bg-[#F8FAFC] rounded-lg border border-[#BBE1FA]/30">
-                <div className="flex items-center gap-3">
-                  <FaFileAlt className="text-[#3282B8]" />
-                  <div>
-                    <p className="text-sm font-medium text-[#1B262C]">{statement.title || 'Statement'}</p>
-                    <p className="text-xs text-[#6B7280]">
-                      {statement.content ? `${statement.content.length} characters` : statement.fileName || ''}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  {statement.content && (
-                    <button className="p-1.5 text-[#0F4C75] hover:bg-blue-50 rounded-lg transition-all" title="View">
-                      <FaEye className="text-sm" />
-                    </button>
-                  )}
-                  {statement.fileName && (
-                    <button className="p-1.5 text-[#0F4C75] hover:bg-blue-50 rounded-lg transition-all" title="Download">
-                      <FaDownload className="text-sm" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
-  // ============================================
-  // RENDER COMMENTS TAB
-  // ============================================
-  const renderComments = () => (
-    <div className="space-y-4">
-      {/* Add Comment Button */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <FaComment className="text-[#0F4C75]" />
-          <span className="text-sm font-semibold text-[#1B262C]">Comments ({caseComments.length})</span>
-        </div>
-        <button
-          onClick={() => {
-            setCommentFormData({ ...commentFormData, caseId: caseId });
-            setShowAddCommentModal(true);
-          }}
-          className="px-4 py-2 bg-[#0F4C75] text-white rounded-xl text-sm font-medium hover:bg-[#1B262C] transition-all duration-200 flex items-center gap-2"
-        >
-          <FaPlusCircle className="text-xs" /> Add Comment
-        </button>
-      </div>
-
-      {commentsLoading ? (
-        <div className="text-center py-8">
-          <div className="flex items-center justify-center gap-3">
-            <div className="w-6 h-6 border-2 border-[#0F4C75] border-t-transparent rounded-full animate-spin"></div>
-            <span className="text-[#6B7280]">Loading comments...</span>
-          </div>
-        </div>
-      ) : caseComments.length > 0 ? (
-        <div className="space-y-3">
-          {caseComments.map((comment, index) => (
-            <div key={comment.id || comment._id || index} className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4 hover:shadow-sm transition-all">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-[#1B262C]">{comment.commentedBy}</span>
-                    <span className="text-xs text-[#6B7280]">{comment.date ? new Date(comment.date).toLocaleDateString() : 'N/A'}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${
-                      comment.status === 'Completed' ? 'bg-[#22C55E]/10 text-[#22C55E] border-[#22C55E]/20' :
-                      comment.status === 'In Progress' ? 'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20' :
-                      comment.status === 'Closed' ? 'bg-[#6B7280]/10 text-[#6B7280] border-[#6B7280]/20' :
-                      'bg-[#3282B8]/10 text-[#0F4C75] border-[#3282B8]/20'
-                    }`}>
-                      {comment.status || 'Pending'}
-                    </span>
-                  </div>
-                  {comment.remarks && (
-                    <p className="text-sm text-[#6B7280] mt-1">{comment.remarks}</p>
-                  )}
-                  {comment.requestToClientDepartment && (
-                    <p className="text-xs text-[#0F4C75] mt-1">📌 {comment.requestToClientDepartment}</p>
-                  )}
-                  {comment.clientDepartments && (
-                    <p className="text-xs text-[#6B7280]">Department: {comment.clientDepartments}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-1 ml-2 flex-shrink-0">
-                  <button
-                    onClick={() => openEditCommentModal(comment)}
-                    className="p-1.5 text-[#F59E0B] hover:bg-[#F59E0B]/10 rounded-lg transition-all"
-                    title="Edit"
-                  >
-                    <FaEdit className="text-sm" />
-                  </button>
-                  <button
-                    onClick={() => openDeleteCommentConfirm(comment)}
-                    className="p-1.5 text-[#EF4444] hover:bg-[#EF4444]/10 rounded-lg transition-all"
-                    title="Delete"
-                  >
-                    <FaTrash className="text-sm" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-12 bg-white rounded-xl border border-[#BBE1FA]/40">
-          <div className="text-4xl mb-2">💬</div>
-          <p className="text-sm text-[#6B7280]">No comments added yet</p>
-          <button
-            onClick={() => {
-              setCommentFormData({ ...commentFormData, caseId: caseId });
-              setShowAddCommentModal(true);
-            }}
-            className="mt-2 text-sm text-[#0F4C75] hover:text-[#3282B8] font-medium"
-          >
-            Add first comment →
-          </button>
-        </div>
-      )}
-    </div>
-  );
-
-  // ============================================
-  // RENDER PARTIES TAB
-  // ============================================
-  const renderParties = () => (
-    <div className="space-y-4">
-      {/* Add Party Button */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <FaUsers className="text-[#0F4C75]" />
-          <span className="text-sm font-semibold text-[#1B262C]">Parties ({caseParties.length})</span>
-        </div>
-        <button
-          onClick={() => {
-            setPartyFormData({ ...partyFormData, caseId: caseId });
-            setShowAddPartyModal(true);
-          }}
-          className="px-4 py-2 bg-[#0F4C75] text-white rounded-xl text-sm font-medium hover:bg-[#1B262C] transition-all duration-200 flex items-center gap-2"
-        >
-          <FaPlusCircle className="text-xs" /> Add Party
-        </button>
-      </div>
-
-      {partiesLoading ? (
-        <div className="text-center py-8">
-          <div className="flex items-center justify-center gap-3">
-            <div className="w-6 h-6 border-2 border-[#0F4C75] border-t-transparent rounded-full animate-spin"></div>
-            <span className="text-[#6B7280]">Loading parties...</span>
-          </div>
-        </div>
-      ) : caseParties.length > 0 ? (
-        <div className="space-y-3">
-          {caseParties.map((party, index) => (
-            <div key={party.id || party._id || index} className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4 hover:shadow-sm transition-all">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="px-2 py-0.5 bg-[#3282B8]/10 text-[#0F4C75] rounded text-xs font-medium border border-[#3282B8]/20">
-                      {party.type || 'Party'}
-                    </span>
-                    <span className="font-medium text-[#1B262C]">{party.name}</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 mt-2">
-                    {party.phone && party.phone !== '-' && (
-                      <p className="text-xs text-[#6B7280] flex items-center gap-1">
-                        <span>📞</span> {party.phone}
-                      </p>
-                    )}
-                    {party.email && party.email !== '-' && (
-                      <p className="text-xs text-[#6B7280] flex items-center gap-1">
-                        <span>✉️</span> {party.email}
-                      </p>
-                    )}
-                    {party.cnic && party.cnic !== '-' && (
-                      <p className="text-xs text-[#6B7280] flex items-center gap-1">
-                        <span>🪪</span> {party.cnic}
-                      </p>
-                    )}
-                    {party.address && party.address !== '-' && (
-                      <p className="text-xs text-[#6B7280] flex items-center gap-1 col-span-2">
-                        <span>📍</span> {party.address}
-                      </p>
-                    )}
-                  </div>
-                  {party.createdBy && (
-                    <p className="text-[10px] text-[#9CA3AF] mt-1">Added by: {party.createdBy}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-1 ml-2 flex-shrink-0">
-                  <button
-                    onClick={() => openEditPartyModal(party)}
-                    className="p-1.5 text-[#F59E0B] hover:bg-[#F59E0B]/10 rounded-lg transition-all"
-                    title="Edit"
-                  >
-                    <FaEdit className="text-sm" />
-                  </button>
-                  <button
-                    onClick={() => openDeletePartyConfirm(party)}
-                    className="p-1.5 text-[#EF4444] hover:bg-[#EF4444]/10 rounded-lg transition-all"
-                    title="Delete"
-                  >
-                    <FaTrash className="text-sm" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-12 bg-white rounded-xl border border-[#BBE1FA]/40">
-          <div className="text-4xl mb-2">👥</div>
-          <p className="text-sm text-[#6B7280]">No parties added yet</p>
-          <button
-            onClick={() => {
-              setPartyFormData({ ...partyFormData, caseId: caseId });
-              setShowAddPartyModal(true);
-            }}
-            className="mt-2 text-sm text-[#0F4C75] hover:text-[#3282B8] font-medium"
-          >
-            Add first party →
-          </button>
-        </div>
-      )}
-    </div>
-  );
-
-  // ============================================
-  // RENDER PROCEEDINGS TAB
-  // ============================================
-  const renderProceedings = () => (
-    <div className="space-y-4">
-      {/* Add Proceeding Button */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <FaGavel className="text-[#0F4C75]" />
-          <span className="text-sm font-semibold text-[#1B262C]">Proceedings ({caseProceedings.length})</span>
-        </div>
-        <button
-          onClick={() => {
-            setShowProceedingForm(!showProceedingForm);
-          }}
-          className="px-4 py-2 bg-[#0F4C75] text-white rounded-xl text-sm font-medium hover:bg-[#1B262C] transition-all duration-200 flex items-center gap-2"
-        >
-          {showProceedingForm ? <FaTimes className="text-xs" /> : <FaPlusCircle className="text-xs" />}
-          {showProceedingForm ? 'Close Form' : 'Add Proceeding'}
-        </button>
-      </div>
-
-      {/* Add Proceeding Form */}
-      {showProceedingForm && (
-        <div className="bg-white rounded-xl border-2 border-[#3282B8] p-4 animate-in fade-in slide-in-from-top duration-300">
-          <div className="flex items-center justify-between mb-3 pb-2 border-b border-[#BBE1FA]/30">
-            <div className="flex items-center gap-2">
-              <FaGavel className="text-[#0F4C75]" />
-              <span className="text-sm font-semibold text-[#1B262C]">New Proceeding</span>
-            </div>
-          </div>
-          <form onSubmit={handleProceedingSubmitWrapper}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-[#6B7280] mb-1">Created By *</label>
-                <input
-                  type="text"
-                  value={proceedingFormData.createdBy}
-                  onChange={(e) => handleProceedingFormChange('createdBy', e.target.value)}
-                  placeholder="Enter your name"
-                  required
-                  className="w-full px-3 py-2 border border-[#BBE1FA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[#6B7280] mb-1">Date *</label>
-                <input
-                  type="date"
-                  value={proceedingFormData.date}
-                  onChange={(e) => handleProceedingFormChange('date', e.target.value)}
-                  required
-                  className="w-full px-3 py-2 border border-[#BBE1FA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] text-sm"
-                />
-              </div>
-            </div>
-            <div className="mt-3">
-              <label className="block text-xs font-medium text-[#6B7280] mb-1">Progress on Date of Hearing *</label>
-              <textarea
-                value={proceedingFormData.progress}
-                onChange={(e) => handleProceedingFormChange('progress', e.target.value)}
-                placeholder="Enter progress"
-                required
-                rows="2"
-                className="w-full px-3 py-2 border border-[#BBE1FA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] text-sm resize-none"
-              />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-              <div>
-                <label className="block text-xs font-medium text-[#6B7280] mb-1">Next Hearing Date *</label>
-                <input
-                  type="date"
-                  value={proceedingFormData.nextHearingDate}
-                  onChange={(e) => handleProceedingFormChange('nextHearingDate', e.target.value)}
-                  required
-                  className="w-full px-3 py-2 border border-[#BBE1FA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[#6B7280] mb-1">Status</label>
-                <select
-                  value={proceedingFormData.status}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value === 'Others') {
-                      setShowCustomStatusInput(true);
-                      handleProceedingFormChange('status', '');
-                    } else {
-                      setShowCustomStatusInput(false);
-                      handleProceedingFormChange('status', value);
-                    }
-                  }}
-                  className="w-full px-3 py-2 border border-[#BBE1FA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] text-sm"
-                >
-                  <option value="">- Select Status -</option>
-                  {statusOptions.map(opt => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
-                {showCustomStatusInput && (
-                  <div className="mt-2 flex gap-2">
-                    <input
-                      type="text"
-                      value={customStatus}
-                      onChange={(e) => setCustomStatus(e.target.value)}
-                      placeholder="Enter custom status..."
-                      className="flex-1 px-3 py-1.5 border border-[#3282B8] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#3282B8]"
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (customStatus.trim()) {
-                          addCustomStatus(customStatus.trim());
-                        }
-                      }}
-                      className="px-3 py-1.5 bg-[#0F4C75] text-white rounded-lg text-sm"
-                    >
-                      Add
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowCustomStatusInput(false);
-                        setCustomStatus('');
-                      }}
-                      className="px-3 py-1.5 text-sm text-[#6B7280] hover:text-[#1B262C]"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="mt-3">
-              <label className="block text-xs font-medium text-[#6B7280] mb-1">Attachment</label>
-              <div className="flex items-center gap-3">
-                <label className="flex-1 px-3 py-2 border-2 border-dashed border-[#BBE1FA] rounded-lg cursor-pointer hover:border-[#3282B8] transition-all bg-[#F8FAFC] text-center">
-                  <span className="text-sm text-[#6B7280]">Choose File</span>
-                  <input
-                    type="file"
-                    className="hidden"
-                    onChange={(e) => {
-                      if (e.target.files[0]) {
-                        handleProceedingFormChange('attachment', e.target.files[0].name);
-                      }
-                    }}
-                  />
-                </label>
-                {proceedingFormData.attachment && (
-                  <span className="text-sm text-[#0F4C75] font-medium">{proceedingFormData.attachment}</span>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-3 mt-4 pt-3 border-t border-[#BBE1FA]/30">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowProceedingForm(false);
-                  setShowCustomStatusInput(false);
-                  setCustomStatus('');
-                }}
-                className="px-4 py-2 text-sm font-medium text-[#6B7280] hover:text-[#1B262C] rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 text-sm font-medium bg-[#0F4C75] text-white rounded-lg hover:bg-[#1B262C] transition-all flex items-center gap-2"
-              >
-                <FaPlus className="text-xs" /> Add Proceeding
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Edit Proceeding Form */}
-      {showEditProceedingForm && editingProceeding && (
-        <div className="bg-white rounded-xl border-2 border-[#F59E0B] p-4 animate-in fade-in slide-in-from-top duration-300">
-          <div className="flex items-center justify-between mb-3 pb-2 border-b border-[#BBE1FA]/30">
-            <div className="flex items-center gap-2">
-              <FaEdit className="text-[#F59E0B]" />
-              <span className="text-sm font-semibold text-[#1B262C]">Edit Proceeding</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setShowEditProceedingForm(false);
-                setEditingProceeding(null);
-              }}
-              className="p-1 text-[#9CA3AF] hover:text-[#1B262C]"
-            >
-              <FaTimes />
-            </button>
-          </div>
-          <form onSubmit={handleEditProceedingSubmitWrapper}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-[#6B7280] mb-1">Created By *</label>
-                <input
-                  type="text"
-                  value={editProceedingFormData.createdBy}
-                  onChange={(e) => handleEditProceedingFormChange('createdBy', e.target.value)}
-                  placeholder="Enter your name"
-                  required
-                  className="w-full px-3 py-2 border border-[#BBE1FA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F59E0B] text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[#6B7280] mb-1">Date *</label>
-                <input
-                  type="date"
-                  value={editProceedingFormData.date}
-                  onChange={(e) => handleEditProceedingFormChange('date', e.target.value)}
-                  required
-                  className="w-full px-3 py-2 border border-[#BBE1FA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F59E0B] text-sm"
-                />
-              </div>
-            </div>
-            <div className="mt-3">
-              <label className="block text-xs font-medium text-[#6B7280] mb-1">Progress on Date of Hearing *</label>
-              <textarea
-                value={editProceedingFormData.progress}
-                onChange={(e) => handleEditProceedingFormChange('progress', e.target.value)}
-                placeholder="Enter progress"
-                required
-                rows="2"
-                className="w-full px-3 py-2 border border-[#BBE1FA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F59E0B] text-sm resize-none"
-              />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-              <div>
-                <label className="block text-xs font-medium text-[#6B7280] mb-1">Next Hearing Date *</label>
-                <input
-                  type="date"
-                  value={editProceedingFormData.nextHearingDate}
-                  onChange={(e) => handleEditProceedingFormChange('nextHearingDate', e.target.value)}
-                  required
-                  className="w-full px-3 py-2 border border-[#BBE1FA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F59E0B] text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[#6B7280] mb-1">Status</label>
-                <select
-                  value={editProceedingFormData.status}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value === 'Others') {
-                      setShowEditCustomStatusInput(true);
-                      handleEditProceedingFormChange('status', '');
-                    } else {
-                      setShowEditCustomStatusInput(false);
-                      handleEditProceedingFormChange('status', value);
-                    }
-                  }}
-                  className="w-full px-3 py-2 border border-[#BBE1FA] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F59E0B] text-sm"
-                >
-                  <option value="">- Select Status -</option>
-                  {editStatusOptions.map(opt => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
-                {showEditCustomStatusInput && (
-                  <div className="mt-2 flex gap-2">
-                    <input
-                      type="text"
-                      value={editCustomStatus}
-                      onChange={(e) => setEditCustomStatus(e.target.value)}
-                      placeholder="Enter custom status..."
-                      className="flex-1 px-3 py-1.5 border border-[#F59E0B] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#F59E0B]"
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (editCustomStatus.trim()) {
-                          addEditCustomStatus(editCustomStatus.trim());
-                        }
-                      }}
-                      className="px-3 py-1.5 bg-[#F59E0B] text-white rounded-lg text-sm"
-                    >
-                      Add
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowEditCustomStatusInput(false);
-                        setEditCustomStatus('');
-                      }}
-                      className="px-3 py-1.5 text-sm text-[#6B7280] hover:text-[#1B262C]"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="mt-3">
-              <label className="block text-xs font-medium text-[#6B7280] mb-1">Attachment</label>
-              <div className="flex items-center gap-3">
-                <label className="flex-1 px-3 py-2 border-2 border-dashed border-[#BBE1FA] rounded-lg cursor-pointer hover:border-[#F59E0B] transition-all bg-[#F8FAFC] text-center">
-                  <span className="text-sm text-[#6B7280]">Choose File</span>
-                  <input
-                    type="file"
-                    className="hidden"
-                    onChange={(e) => {
-                      if (e.target.files[0]) {
-                        handleEditProceedingFormChange('attachment', e.target.files[0].name);
-                      }
-                    }}
-                  />
-                </label>
-                {editProceedingFormData.attachment && (
-                  <span className="text-sm text-[#F59E0B] font-medium">{editProceedingFormData.attachment}</span>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center justify-end gap-3 mt-4 pt-3 border-t border-[#BBE1FA]/30">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowEditProceedingForm(false);
-                  setEditingProceeding(null);
-                  setShowEditCustomStatusInput(false);
-                  setEditCustomStatus('');
-                }}
-                className="px-4 py-2 text-sm font-medium text-[#6B7280] hover:text-[#1B262C] rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 text-sm font-medium bg-[#F59E0B] text-white rounded-lg hover:bg-[#D97706] transition-all flex items-center gap-2"
-              >
-                <FaSave className="text-xs" /> Update
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Proceedings List */}
-      {proceedingsLoading ? (
-        <div className="text-center py-8">
-          <div className="flex items-center justify-center gap-3">
-            <div className="w-6 h-6 border-2 border-[#0F4C75] border-t-transparent rounded-full animate-spin"></div>
-            <span className="text-[#6B7280]">Loading proceedings...</span>
-          </div>
-        </div>
-      ) : caseProceedings.length > 0 ? (
-        <div className="space-y-3">
-          {caseProceedings.map((p, index) => (
-            <div
-              key={p.id || p._id || index}
-              className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4 hover:shadow-sm transition-all cursor-pointer"
-              onClick={() => openProceedingDetail(p)}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-[#1B262C]">{p.createdBy || 'N/A'}</span>
-                    <span className="text-xs text-[#6B7280]">{p.date ? new Date(p.date).toLocaleDateString() : 'N/A'}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${
-                      p.status?.toLowerCase().includes('adjournment') ? 'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20' :
-                      p.status?.toLowerCase().includes('decision') ? 'bg-[#22C55E]/10 text-[#22C55E] border-[#22C55E]/20' :
-                      p.status?.toLowerCase().includes('dismissed') ? 'bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/20' :
-                      'bg-[#3282B8]/10 text-[#0F4C75] border-[#3282B8]/20'
-                    }`}>
-                      {p.status || 'N/A'}
-                    </span>
-                  </div>
-                  <p className="text-sm text-[#6B7280] mt-1 line-clamp-2">{p.progress || p.description || 'N/A'}</p>
-                  {p.nextHearingDate && (
-                    <p className="text-xs text-[#0F4C75] mt-1 flex items-center gap-1">
-                      <FaCalendarAlt className="text-[10px]" /> Next: {new Date(p.nextHearingDate).toLocaleDateString()}
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-1 ml-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={() => openEditProceedingForm(p)}
-                    className="p-1.5 text-[#F59E0B] hover:bg-[#F59E0B]/10 rounded-lg transition-all"
-                    title="Edit"
-                  >
-                    <FaEdit className="text-sm" />
-                  </button>
-                  <button
-                    onClick={() => openDeleteConfirm(p.id || p._id, `${p.createdBy || 'Proceeding'}`)}
-                    className="p-1.5 text-[#EF4444] hover:bg-[#EF4444]/10 rounded-lg transition-all"
-                    title="Delete"
-                  >
-                    <FaTrash className="text-sm" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-12 bg-white rounded-xl border border-[#BBE1FA]/40">
-          <div className="text-4xl mb-2">📋</div>
-          <p className="text-sm text-[#6B7280]">No proceedings recorded yet</p>
-          <button
-            onClick={() => setShowProceedingForm(true)}
-            className="mt-2 text-sm text-[#0F4C75] hover:text-[#3282B8] font-medium"
-          >
-            Add first proceeding →
-          </button>
-        </div>
-      )}
-    </div>
-  );
-
-  // ============================================
-  // MAIN MODAL RENDER
-  // ============================================
   return (
-    <>
-      {/* Delete Confirmation */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-[#1B262C]/70 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-red-500/20">
-            <div className="flex justify-center mb-4">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-lg shadow-red-500/30 animate-pulse">
-                <FaTrash className="text-3xl text-white" />
-              </div>
-            </div>
-            <h3 className="text-xl font-bold text-[#1B262C] text-center mb-2">Delete Case?</h3>
-            <p className="text-[#6B7280] text-center text-sm mb-6">
-              Are you sure you want to delete this case? This action cannot be undone.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-[#6B7280] bg-[#F0F4F8] rounded-xl hover:bg-[#E5E7EB] transition-all"
-                disabled={isDeleting}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={isDeleting}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-red-500 to-red-600 rounded-xl hover:shadow-lg hover:shadow-red-500/30 transition-all flex items-center justify-center gap-2"
-              >
-                {isDeleting ? (
-                  <>
-                    <span className="animate-spin">⟳</span> Deleting...
-                  </>
-                ) : (
-                  <>
-                    <FaTrash className="text-sm" /> Delete
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
+    <div className={`relative ${className}`} ref={dropdownRef}>
+      {label && (
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          {label} {required && <span className="text-red-500">*</span>}
+        </label>
+      )}
+      <div className="relative">
+        <input
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={handleInputChange}
+          onFocus={() => setIsOpen(true)}
+          placeholder={placeholder}
+          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] focus:border-transparent transition-all duration-200 bg-white text-gray-900 pr-10"
+        />
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+        >
+          <FaChevronDown className={`text-sm transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+      </div>
+      {isOpen && filteredOptions.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+          {filteredOptions.map((option, index) => (
+            <button
+              key={index}
+              type="button"
+              onClick={() => handleSelectOption(option)}
+              className={`w-full text-left px-4 py-2 text-sm hover:bg-[#3282B8]/10 transition-colors ${
+                value === option ? 'bg-[#3282B8]/10 text-[#0F4C75] font-medium' : 'text-gray-700'
+              }`}
+            >
+              {option}
+            </button>
+          ))}
         </div>
       )}
+      {isOpen && filteredOptions.length === 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-4 text-sm text-gray-500">
+          No options found. Press Enter to add "{searchTerm}"
+        </div>
+      )}
+    </div>
+  );
+};
 
-      {/* Main Modal */}
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1B262C]/70 backdrop-blur-sm animate-in fade-in duration-200 p-4">
-        <div className="bg-white rounded-3xl max-w-5xl w-full max-h-[90vh] overflow-hidden shadow-2xl animate-in zoom-in duration-200 border border-[#3282B8]/20">
+// ===== FILE ICON HELPER =====
+const getFileIcon = (fileName) => {
+  const extension = fileName.split('.').pop()?.toLowerCase() || '';
+  const iconClass = "mt-0.5 flex-shrink-0";
+  
+  switch(extension) {
+    case 'pdf':
+      return <FaFilePdf className={`${iconClass} text-red-500`} />;
+    case 'doc':
+    case 'docx':
+      return <FaFileWord className={`${iconClass} text-blue-500`} />;
+    case 'xls':
+    case 'xlsx':
+      return <FaFileExcel className={`${iconClass} text-green-500`} />;
+    case 'jpg':
+    case 'jpeg':
+    case 'png':
+    case 'gif':
+    case 'svg':
+      return <FaFileImage className={`${iconClass} text-purple-500`} />;
+    default:
+      return <FaFile className={`${iconClass} text-gray-500`} />;
+  }
+};
+
+// ===== MAIN MODAL =====
+const AddCaseModal = ({ isOpen, onClose, onAdd }) => {
+  const [formData, setFormData] = useState({
+    division: '',
+    district: '',
+    caseNumber: '',
+    titleOfCase: '',
+    plaintiff: '',
+    defendant: '',
+    nameOfCourt: '',
+    natureOfCase: '',
+    nextDateOfHearing: '',
+    copyOfSummon: null,
+    copyOfSummonName: '',
+    copyOfPlaint: null,
+    copyOfPlaintName: '',
+    relevantDepartmentalRecord: null,
+    relevantDepartmentalRecordName: '',
+    writtenStatements: [],
+    lawOfficer: {
+      type: 'Department Representative',
+      name: '',
+      designation: '',
+      officeAddress: '',
+      officialNumber: '',
+      cellNumber: '',
+    },
+    alternateLawOfficer: {
+      type: 'Department Representative',
+      name: '',
+      designation: '',
+      officeAddress: '',
+      officialNumber: '',
+      cellNumber: '',
+    },
+  });
+
+  const [loading, setLoading] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [showStatementEditor, setShowStatementEditor] = useState(false);
+  const [editingStatementId, setEditingStatementId] = useState(null);
+  const [statementTitle, setStatementTitle] = useState('');
+  const [statementContent, setStatementContent] = useState('');
+  const [statementFile, setStatementFile] = useState(null);
+  
+  const fileInputRef = useRef(null);
+  const statementFileInputRef = useRef(null);
+
+  const generateId = () => {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+  };
+
+  // ===== GENERATE UNIQUE CASE NUMBER =====
+  const generateUniqueCaseNumber = () => {
+    const year = new Date().getFullYear();
+    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    return `${year}-CV-${random}`;
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleLawOfficerChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      lawOfficer: {
+        ...prev.lawOfficer,
+        [name]: value
+      }
+    }));
+  };
+
+  const handleAlternateLawOfficerChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      alternateLawOfficer: {
+        ...prev.alternateLawOfficer,
+        [name]: value
+      }
+    }));
+  };
+
+  // ===== ATTACHMENT HANDLERS =====
+  const handleFileSelect = (e, type) => {
+    const file = e.target.files[0];
+    if (file) {
+      const fileNames = {
+        summon: 'Copy of summon/Notices/Request to defend',
+        plaint: 'Copy of plaint / petition',
+        departmental: 'Relevant Departmental Record',
+        other: file.name
+      };
+      
+      const nameKey = {
+        summon: 'copyOfSummonName',
+        plaint: 'copyOfPlaintName',
+        departmental: 'relevantDepartmentalRecordName'
+      };
+      
+      const fileKey = {
+        summon: 'copyOfSummon',
+        plaint: 'copyOfPlaint',
+        departmental: 'relevantDepartmentalRecord'
+      };
+      
+      setFormData(prev => ({
+        ...prev,
+        [fileKey[type]]: file,
+        [nameKey[type]]: file.name
+      }));
+      
+      toast.success(`${fileNames[type] || file.name} uploaded!`);
+    }
+    e.target.value = '';
+  };
+
+  // ===== WRITTEN STATEMENT HANDLERS =====
+  const handleOpenStatementEditor = (statement = null) => {
+    if (statement) {
+      setEditingStatementId(statement.id);
+      setStatementTitle(statement.title || '');
+      setStatementContent(statement.content || '');
+      setStatementFile(null);
+    } else {
+      setEditingStatementId(null);
+      setStatementTitle('');
+      setStatementContent('');
+      setStatementFile(null);
+    }
+    setShowStatementEditor(true);
+  };
+
+  const handleStatementFileSelect = (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length > 0) {
+      files.forEach((file, index) => {
+        const statementData = {
+          id: generateId() + index,
+          title: file.name.replace(/\.[^/.]+$/, ""),
+          content: '',
+          file: file,
+          fileName: file.name,
+          fileSize: file.size,
+          createdAt: new Date().toISOString(),
+        };
+        
+        setFormData(prev => ({
+          ...prev,
+          writtenStatements: [...prev.writtenStatements, statementData]
+        }));
+      });
+      
+      toast.success(`${files.length} statement file(s) uploaded!`);
+    }
+    e.target.value = '';
+  };
+
+  const handleSaveStatement = () => {
+    if (!statementTitle.trim()) {
+      toast.error('Please enter a title for the statement');
+      return;
+    }
+
+    if (!statementContent.trim() && !statementFile) {
+      toast.error('Please enter content or select a file');
+      return;
+    }
+
+    const statementData = {
+      id: editingStatementId || generateId(),
+      title: statementTitle.trim(),
+      content: statementContent.trim(),
+      file: statementFile || null,
+      fileName: statementFile?.name || '',
+      fileSize: statementFile?.size || 0,
+      createdAt: new Date().toISOString(),
+    };
+
+    if (editingStatementId) {
+      setFormData(prev => ({
+        ...prev,
+        writtenStatements: prev.writtenStatements.map(s => 
+          s.id === editingStatementId ? statementData : s
+        )
+      }));
+      toast.success('Statement updated successfully!');
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        writtenStatements: [...prev.writtenStatements, statementData]
+      }));
+      toast.success('Statement added successfully!');
+    }
+
+    setShowStatementEditor(false);
+    setEditingStatementId(null);
+    setStatementTitle('');
+    setStatementContent('');
+    setStatementFile(null);
+    if (statementFileInputRef.current) {
+      statementFileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveStatement = (id) => {
+    setFormData(prev => ({
+      ...prev,
+      writtenStatements: prev.writtenStatements.filter(s => s.id !== id)
+    }));
+    toast.success('Statement removed');
+  };
+
+  // ===== STATEMENT VIEW/DOWNLOAD/PRINT =====
+  const handleViewStatement = (statement) => {
+    if (statement.file) {
+      const url = URL.createObjectURL(statement.file);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } else if (statement.content) {
+      const printWindow = window.open('', '_blank', 'width=800,height=600');
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>${statement.title || 'Written Statement'}</title>
+              <style>
+                body { 
+                  font-family: Arial, sans-serif; 
+                  padding: 40px; 
+                  line-height: 1.8; 
+                  max-width: 800px; 
+                  margin: 0 auto; 
+                }
+                h1 { color: #0F4C75; border-bottom: 2px solid #0F4C75; padding-bottom: 10px; }
+                .content { white-space: pre-wrap; word-wrap: break-word; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.8; }
+                .meta { color: #6B7280; font-size: 12px; margin-top: 10px; border-top: 1px solid #E5E7EB; padding-top: 10px; }
+              </style>
+            </head>
+            <body>
+              <h1>${statement.title || 'Written Statement'}</h1>
+              <hr/>
+              <div class="content">${statement.content}</div>
+              <div class="meta">
+                <p>Created: ${new Date(statement.createdAt).toLocaleDateString()}</p>
+                <p>Words: ${statement.content.trim().split(/\s+/).filter(w => w).length}</p>
+                <p>Characters: ${statement.content.length}</p>
+              </div>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+      }
+    }
+  };
+
+  const handleDownloadStatement = (statement) => {
+    if (statement.file) {
+      const url = URL.createObjectURL(statement.file);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = statement.fileName || 'statement';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      toast.success(`Downloading: ${statement.fileName}`);
+    } else if (statement.content) {
+      const content = `
+        Title: ${statement.title || 'Written Statement'}
+        Date: ${new Date(statement.createdAt).toLocaleDateString()}
+        ${'='.repeat(50)}
+        
+        ${statement.content}
+        
+        ${'='.repeat(50)}
+        Words: ${statement.content.trim().split(/\s+/).filter(w => w).length}
+        Characters: ${statement.content.length}
+      `;
+      
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${statement.title || 'written-statement'}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      toast.success('Downloading written statement');
+    }
+  };
+
+  const handlePrintStatement = (statement) => {
+    if (statement.file) {
+      const url = URL.createObjectURL(statement.file);
+      const printWindow = window.open(url, '_blank');
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } else if (statement.content) {
+      const printWindow = window.open('', '_blank', 'width=800,height=600');
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>${statement.title || 'Written Statement'} - Print</title>
+              <style>
+                body { 
+                  font-family: Arial, sans-serif; 
+                  padding: 40px; 
+                  line-height: 1.8; 
+                  max-width: 800px; 
+                  margin: 0 auto; 
+                }
+                h1 { color: #0F4C75; border-bottom: 2px solid #0F4C75; padding-bottom: 10px; }
+                .content { white-space: pre-wrap; word-wrap: break-word; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.8; }
+                .meta { color: #6B7280; font-size: 12px; margin-top: 10px; border-top: 1px solid #E5E7EB; padding-top: 10px; }
+              </style>
+            </head>
+            <body>
+              <h1>${statement.title || 'Written Statement'}</h1>
+              <hr/>
+              <div class="content">${statement.content}</div>
+              <div class="meta">
+                <p>Created: ${new Date(statement.createdAt).toLocaleDateString()}</p>
+                <p>Words: ${statement.content.trim().split(/\s+/).filter(w => w).length}</p>
+                <p>Characters: ${statement.content.length}</p>
+              </div>
+              <script>
+                window.onload = function() { window.print(); }
+              <\/script>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+      }
+    }
+  };
+
+  // ===== SUBMIT =====
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!formData.division) {
+      toast.error('Please enter Division');
+      return;
+    }
+    if (!formData.district) {
+      toast.error('Please enter District');
+      return;
+    }
+    if (!formData.caseNumber) {
+      toast.error('Please enter Case Number');
+      return;
+    }
+    if (!formData.titleOfCase) {
+      toast.error('Please enter Title of the Case');
+      return;
+    }
+    if (!formData.plaintiff) {
+      toast.error('Please enter Plaintiff');
+      return;
+    }
+    if (!formData.defendant) {
+      toast.error('Please enter Defendant');
+      return;
+    }
+    if (!formData.nameOfCourt) {
+      toast.error('Please enter Name of the Court');
+      return;
+    }
+    if (!formData.natureOfCase) {
+      toast.error('Please enter Nature of the Case');
+      return;
+    }
+    if (!formData.nextDateOfHearing) {
+      toast.error('Please select Next Date of Hearing');
+      return;
+    }
+
+    setLoading(true);
+    
+    try {
+      const attachmentsObj = formData.attachments || {};
+      const attachmentsCount = Object.values(attachmentsObj).filter(v => v).length;
+      
+      const statementsData = formData.writtenStatements.map(s => ({
+        title: s.title,
+        content: s.content || '',
+        fileName: s.fileName || '',
+        fileSize: s.fileSize || 0,
+        createdAt: s.createdAt,
+      }));
+
+      // ✅ Get current timestamp
+      const now = new Date().toISOString();
+
+      const submitData = {
+        division: formData.division,
+        district: formData.district,
+        caseNumber: formData.caseNumber,
+        status: 'active',
+        caseTitle: formData.titleOfCase,
+        title: formData.titleOfCase,
+        plaintiff: formData.plaintiff,
+        defendant: formData.defendant,
+        courtName: formData.nameOfCourt,
+        courtDetails: {
+          courtName: formData.nameOfCourt,
+          district: formData.district,
+          nextDate: formData.nextDateOfHearing,
+        },
+        caseNature: {
+          trial: formData.natureOfCase,
+        },
+        nextDate: formData.nextDateOfHearing,
+        nexthearing: formData.nextDateOfHearing,
+        attachments: {
+          copyOfSummon: formData.copyOfSummonName || '',
+          copyOfPlaint: formData.copyOfPlaintName || '',
+          relevantDepartmentalRecord: formData.relevantDepartmentalRecordName || '',
+        },
+        documents: formData.attachments || {},
+        documentsCount: attachmentsCount,
+        writtenStatements: statementsData,
+        lawOfficer: formData.lawOfficer,
+        alternateLawOfficer: formData.alternateLawOfficer,
+        party: 'N/A',
+        caseType: 'Civil',
+        priority: 'Medium',
+        amount: 'N/A',
+        judge: 'N/A',
+        assignedTo: 'N/A',
+        hearings: 0,
+        date: new Date().toISOString().split('T')[0],
+        // ✅ NEW BADGE TRACKING FIELDS - Professional
+        createdAt: now,
+        isNew: true,
+        viewedAt: null,
+      };
+
+      console.log('📤 Submitting new case:', submitData);
+      
+      const result = await onAdd(submitData);
+      console.log('📦 Add result:', result);
+      
+      if (result.success) {
+        toast.success('Case added successfully!');
+        resetForm();
+        onClose();
+      } else {
+        toast.error(result.error || 'Failed to add case');
+      }
+    } catch (error) {
+      console.error('❌ Add case error:', error);
+      
+      if (error.message && error.message.includes('E11000 duplicate key error')) {
+        const newCaseNumber = generateUniqueCaseNumber();
+        toast.error(`Case number "${formData.caseNumber}" already exists. Please use a different case number.`);
+        setFormData(prev => ({ ...prev, caseNumber: newCaseNumber }));
+      } else {
+        toast.error(error.message || 'Failed to add case');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      division: '',
+      district: '',
+      caseNumber: '',
+      titleOfCase: '',
+      plaintiff: '',
+      defendant: '',
+      nameOfCourt: '',
+      natureOfCase: '',
+      nextDateOfHearing: '',
+      copyOfSummon: null,
+      copyOfSummonName: '',
+      copyOfPlaint: null,
+      copyOfPlaintName: '',
+      relevantDepartmentalRecord: null,
+      relevantDepartmentalRecordName: '',
+      writtenStatements: [],
+      lawOfficer: {
+        type: 'Department Representative',
+        name: '',
+        designation: '',
+        officeAddress: '',
+        officialNumber: '',
+        cellNumber: '',
+      },
+      alternateLawOfficer: {
+        type: 'Department Representative',
+        name: '',
+        designation: '',
+        officeAddress: '',
+        officialNumber: '',
+        cellNumber: '',
+      },
+    });
+    setSelectedFiles([]);
+    setShowStatementEditor(false);
+    setEditingStatementId(null);
+    setStatementTitle('');
+    setStatementContent('');
+    setStatementFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    if (statementFileInputRef.current) {
+      statementFileInputRef.current.value = '';
+    }
+  };
+
+  // ✅ CRITICAL: This must be here - prevents rendering when closed
+  if (!isOpen) return null;
+
+  // ===== DROPDOWN OPTIONS =====
+  const lawOfficerTypes = [
+    'Department Representative',
+    'Law Officer',
+    'Government Pleader',
+    'Assistant Attorney General',
+    'Deputy Attorney General'
+  ];
+
+  const divisionOptions = [
+    'Lahore',
+    'Gujranwala',
+    'Rawalpindi',
+    'Multan',
+    'Faisalabad',
+    'Sahiwal',
+    'Sargodha',
+    'Bahawalpur',
+    'Dera Ghazi Khan'
+  ];
+
+  const districtOptions = [
+    'Lahore',
+    'Sheikhupura',
+    'Kasur',
+    'Nankana Sahib',
+    'Gujranwala',
+    'Sialkot',
+    'Gujrat',
+    'Mandi Bahauddin',
+    'Hafizabad',
+    'Rawalpindi',
+    'Attock',
+    'Jhelum',
+    'Chakwal',
+    'Multan',
+    'Khanewal',
+    'Vehari',
+    'Lodhran',
+    'Faisalabad',
+    'Toba Tek Singh',
+    'Jhang',
+    'Chiniot',
+    'Sahiwal',
+    'Okara',
+    'Pakpattan',
+    'Sargodha',
+    'Khushab',
+    'Bhakkar',
+    'Mianwali'
+  ];
+
+  const courtOptions = [
+    'Civil Judge 1st Class',
+    'Civil Judge 2nd Class',
+    'Civil Judge 3rd Class',
+    'Additional District Judge',
+    'District Judge',
+    'Session Judge',
+    'High Court',
+    'Supreme Court',
+    'Family Court',
+    'Labour Court'
+  ];
+
+  const natureOfCaseOptions = [
+    'Suit for declaration',
+    'Suit for recovery',
+    'Suit for possession',
+    'Suit for injunction',
+    'Suit for damages',
+    'Criminal case',
+    'Civil appeal',
+    'Constitutional petition',
+    'Writ petition',
+    'Family case',
+    'Labour dispute'
+  ];
+
+  const titleOfCaseOptions = [
+    'Plaintiff(s)',
+    'Defendant(s)',
+    'Appellant(s)',
+    'Respondent(s)',
+    'Petitioner(s)'
+  ];
+
+  const plaintiffOptions = [
+    'Zubaida Bibi',
+    'Smith',
+    'Williams',
+    'Ali',
+    'Ahmed',
+    'Fatima',
+    'Muhammad',
+    'Khan'
+  ];
+
+  const defendantOptions = [
+    'Province of Punjab',
+    'Government',
+    'State',
+    'Corporation',
+    'Company',
+    'Federation'
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 bg-gray-50/80 backdrop-blur-sm flex items-center justify-center overflow-y-auto p-4">
+      <div className="w-full max-w-3xl">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200/80 overflow-hidden">
           
-          {/* Modal Header - Always visible */}
-          <div className="relative bg-gradient-to-r from-[#0F4C75] to-[#3282B8] px-6 py-4 rounded-t-3xl flex-shrink-0">
-            <div className="absolute inset-0 bg-white/5 rounded-t-3xl"></div>
-            <div className="relative flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg">
-                  <GiJusticeStar className="text-xl text-white" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">Case Details</h3>
-                  <p className="text-white/70 text-xs">#{caseData.caseNumber || 'N/A'}</p>
-                </div>
+          {/* Header */}
+          <div className="bg-white border-b border-gray-200 px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Add New Case</h2>
+                <p className="text-sm text-gray-500">Fill in the case details below</p>
               </div>
               <button
+                type="button"
                 onClick={onClose}
-                className="p-2 text-white/60 hover:text-white hover:bg-white/20 rounded-xl transition-all duration-200 flex-shrink-0"
+                className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg p-2 transition-all duration-200"
               >
                 <FaTimes className="text-xl" />
               </button>
             </div>
           </div>
 
-          {/* Modal Body - Scrollable */}
-          <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
-            
-            {/* Tabs */}
-            <div className="flex items-center gap-1 mb-6 bg-[#F0F4F8] rounded-xl p-1">
-              <button
-                onClick={() => setActiveTab('details')}
-                className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                  activeTab === 'details'
-                    ? 'bg-white text-[#0F4C75] shadow-sm'
-                    : 'text-[#6B7280] hover:text-[#1B262C]'
-                }`}
-              >
-                <FaInfoCircle className="inline mr-2 text-xs" />
-                Details
-              </button>
-              <button
-                onClick={() => setActiveTab('comments')}
-                className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                  activeTab === 'comments'
-                    ? 'bg-white text-[#0F4C75] shadow-sm'
-                    : 'text-[#6B7280] hover:text-[#1B262C]'
-                }`}
-              >
-                <FaComment className="inline mr-2 text-xs" />
-                Comments ({caseComments.length})
-              </button>
-              <button
-                onClick={() => setActiveTab('parties')}
-                className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                  activeTab === 'parties'
-                    ? 'bg-white text-[#0F4C75] shadow-sm'
-                    : 'text-[#6B7280] hover:text-[#1B262C]'
-                }`}
-              >
-                <FaUsers className="inline mr-2 text-xs" />
-                Parties ({caseParties.length})
-              </button>
-              <button
-                onClick={() => setActiveTab('proceedings')}
-                className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                  activeTab === 'proceedings'
-                    ? 'bg-white text-[#0F4C75] shadow-sm'
-                    : 'text-[#6B7280] hover:text-[#1B262C]'
-                }`}
-              >
-                <FaGavel className="inline mr-2 text-xs" />
-                Proceedings ({caseProceedings.length})
-              </button>
-            </div>
+          {/* Form Content */}
+          <div className="px-6 py-6 max-h-[calc(100vh-180px)] overflow-y-auto">
+            <form id="addCaseForm" onSubmit={handleSubmit} className="space-y-4">
+              
+              {/* ===== DIVISION & DISTRICT ===== */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Combobox
+                    label="Division *"
+                    value={formData.division}
+                    onChange={(val) => setFormData(prev => ({ ...prev, division: val }))}
+                    placeholder="e.g. Lahore"
+                    options={divisionOptions}
+                  />
+                </div>
+                <div>
+                  <Combobox
+                    label="District *"
+                    value={formData.district}
+                    onChange={(val) => setFormData(prev => ({ ...prev, district: val }))}
+                    placeholder="e.g. Sheikhupura"
+                    options={districtOptions}
+                  />
+                </div>
+              </div>
 
-            {/* Tab Content */}
-            {activeTab === 'details' && renderDetails()}
-            {activeTab === 'comments' && renderComments()}
-            {activeTab === 'parties' && renderParties()}
-            {activeTab === 'proceedings' && renderProceedings()}
+              {/* ===== CASE NUMBER ===== */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Case Number *
+                </label>
+                <input
+                  type="text"
+                  name="caseNumber"
+                  value={formData.caseNumber}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] focus:border-transparent transition-all duration-200 bg-white text-gray-900"
+                  placeholder="e.g. 173073822"
+                />
+              </div>
 
+              {/* ===== TITLE OF THE CASE ===== */}
+              <div>
+                <Combobox
+                  label="Title of the Case *"
+                  value={formData.titleOfCase}
+                  onChange={(val) => setFormData(prev => ({ ...prev, titleOfCase: val }))}
+                  placeholder="e.g. Plaintiff(s)"
+                  options={titleOfCaseOptions}
+                />
+              </div>
+
+              {/* ===== PLAINTIFF VS DEFENDANT ===== */}
+              <div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Plaintiff *</label>
+                    <input
+                      type="text"
+                      name="plaintiff"
+                      value={formData.plaintiff}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] focus:border-transparent transition-all duration-200 bg-white text-gray-900"
+                      placeholder="e.g. Ali"
+                    />
+                  </div>
+                  <div className="flex items-center justify-center">
+                    <span className="text-xl font-bold text-gray-700 tracking-wider">VS</span>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Defendant *</label>
+                    <input
+                      type="text"
+                      name="defendant"
+                      value={formData.defendant}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] focus:border-transparent transition-all duration-200 bg-white text-gray-900"
+                      placeholder="e.g. Zain"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* ===== NAME OF THE COURT ===== */}
+              <div>
+                <Combobox
+                  label="Name of the Court *"
+                  value={formData.nameOfCourt}
+                  onChange={(val) => setFormData(prev => ({ ...prev, nameOfCourt: val }))}
+                  placeholder="e.g. Civil Judge 2nd Class"
+                  options={courtOptions}
+                />
+              </div>
+
+              {/* ===== NATURE OF THE CASE ===== */}
+              <div>
+                <Combobox
+                  label="Nature of the Case *"
+                  value={formData.natureOfCase}
+                  onChange={(val) => setFormData(prev => ({ ...prev, natureOfCase: val }))}
+                  placeholder="e.g. Suit for recovery"
+                  options={natureOfCaseOptions}
+                />
+              </div>
+
+              {/* ===== NEXT DATE OF HEARING ===== */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Next Date of Hearing *
+                </label>
+                <input
+                  type="date"
+                  name="nextDateOfHearing"
+                  value={formData.nextDateOfHearing}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] focus:border-transparent transition-all duration-200 bg-white text-gray-900"
+                />
+              </div>
+
+              {/* ===== COPY OF SUMMON/NOTICES/REQUEST TO DEFEND ===== */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Copy of summon/Notices/Request to defend
+                </label>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById('summonUpload').click()}
+                    className="px-4 py-2.5 bg-[#0F4C75] text-white rounded-lg hover:bg-[#1B262C] transition-all duration-200 flex items-center gap-2 text-sm shadow-sm shadow-[#0F4C75]/20"
+                  >
+                    <FaUpload className="text-xs" /> Choose File
+                  </button>
+                  <input
+                    id="summonUpload"
+                    type="file"
+                    onChange={(e) => handleFileSelect(e, 'summon')}
+                    className="hidden"
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.txt"
+                  />
+                  <span className="text-sm text-gray-500">
+                    {formData.copyOfSummonName || 'No file chosen'}
+                  </span>
+                </div>
+              </div>
+
+              {/* ===== COPY OF PLAINT / PETITION ===== */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Copy of plaint / petition
+                </label>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById('plaintUpload').click()}
+                    className="px-4 py-2.5 bg-[#0F4C75] text-white rounded-lg hover:bg-[#1B262C] transition-all duration-200 flex items-center gap-2 text-sm shadow-sm shadow-[#0F4C75]/20"
+                  >
+                    <FaUpload className="text-xs" /> Choose File
+                  </button>
+                  <input
+                    id="plaintUpload"
+                    type="file"
+                    onChange={(e) => handleFileSelect(e, 'plaint')}
+                    className="hidden"
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.txt"
+                  />
+                  <span className="text-sm text-gray-500">
+                    {formData.copyOfPlaintName || 'No file chosen'}
+                  </span>
+                </div>
+              </div>
+
+              {/* ===== RELEVANT DEPARTMENTAL RECORD ===== */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Relevant Departmental Record
+                </label>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => document.getElementById('departmentalUpload').click()}
+                    className="px-4 py-2.5 bg-[#0F4C75] text-white rounded-lg hover:bg-[#1B262C] transition-all duration-200 flex items-center gap-2 text-sm shadow-sm shadow-[#0F4C75]/20"
+                  >
+                    <FaUpload className="text-xs" /> Choose File
+                  </button>
+                  <input
+                    id="departmentalUpload"
+                    type="file"
+                    onChange={(e) => handleFileSelect(e, 'departmental')}
+                    className="hidden"
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.txt"
+                  />
+                  <span className="text-sm text-gray-500">
+                    {formData.relevantDepartmentalRecordName || 'No file chosen'}
+                  </span>
+                </div>
+              </div>
+
+              {/* ===== WRITTEN STATEMENTS ===== */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Written Statement
+                </label>
+                
+                {!showStatementEditor && (
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenStatementEditor()}
+                      className="px-4 py-2 bg-[#3282B8]/10 text-[#0F4C75] border border-[#3282B8]/30 rounded-lg hover:bg-[#3282B8]/20 transition-all duration-200 flex items-center gap-2 text-sm"
+                    >
+                      <FaEdit className="text-xs" /> Type Statement
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => statementFileInputRef.current?.click()}
+                      className="px-4 py-2 bg-[#0F4C75] text-white rounded-lg hover:bg-[#1B262C] transition-all duration-200 flex items-center gap-2 text-sm shadow-sm shadow-[#0F4C75]/20"
+                    >
+                      <FaUpload className="text-xs" /> Upload Statement
+                    </button>
+                    <input
+                      ref={statementFileInputRef}
+                      type="file"
+                      multiple
+                      onChange={handleStatementFileSelect}
+                      className="hidden"
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.txt"
+                    />
+                  </div>
+                )}
+
+                {/* Statement Editor */}
+                {showStatementEditor && (
+                  <div className="mt-2 border border-gray-300 rounded-lg overflow-hidden">
+                    <div className="bg-gray-100 px-4 py-2 border-b border-gray-300 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <FaEdit className="text-[#0F4C75] text-sm" />
+                        <span className="text-sm font-medium text-gray-700">
+                          {editingStatementId ? 'Edit Statement' : 'New Statement'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleSaveStatement}
+                          className="px-3 py-1 bg-[#0F4C75] text-white text-xs rounded hover:bg-[#1B262C] transition-all duration-200"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowStatementEditor(false);
+                            setEditingStatementId(null);
+                            setStatementTitle('');
+                            setStatementContent('');
+                            setStatementFile(null);
+                          }}
+                          className="px-3 py-1 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300 transition-all duration-200"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-white px-4 pt-3 pb-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Statement Title
+                      </label>
+                      <input
+                        type="text"
+                        value={statementTitle}
+                        onChange={(e) => setStatementTitle(e.target.value)}
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] focus:border-transparent transition-all duration-200 bg-white text-gray-900"
+                        placeholder="e.g. Written Statement of Plaintiff"
+                      />
+                    </div>
+                    
+                    <div className="bg-white px-4 pb-3">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Statement Content
+                      </label>
+                      <textarea
+                        value={statementContent}
+                        onChange={(e) => setStatementContent(e.target.value)}
+                        className="w-full h-[150px] p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] focus:border-transparent transition-all duration-200 resize-none text-gray-800 text-sm leading-relaxed"
+                        placeholder="Enter the statement content here..."
+                      />
+                      <div className="mt-2">
+                        <p className="text-xs text-gray-500 mb-1">Or upload a file:</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.accept = '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.txt';
+                            input.multiple = true;
+                            input.onchange = (e) => {
+                              const files = Array.from(e.target.files);
+                              if (files.length > 0) {
+                                const file = files[0];
+                                setStatementFile(file);
+                                setStatementContent('');
+                                toast.success(`File "${file.name}" selected`);
+                              }
+                            };
+                            input.click();
+                          }}
+                          className="px-4 py-1.5 bg-[#3282B8]/10 text-[#0F4C75] border border-[#3282B8]/30 rounded-lg hover:bg-[#3282B8]/20 transition-all duration-200 text-sm flex items-center gap-2"
+                        >
+                          <FaUpload className="text-xs" /> Choose File
+                        </button>
+                        {statementFile && (
+                          <span className="text-xs text-green-600 ml-2">
+                            ✅ {statementFile.name} ({(statementFile.size / 1024).toFixed(1)} KB)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="bg-gray-50 px-4 py-2 border-t border-gray-200 text-xs text-gray-400 flex items-center justify-between">
+                      {statementContent ? (
+                        <>
+                          <span>Word count: {statementContent.trim().split(/\s+/).filter(w => w).length}</span>
+                          <span>Characters: {statementContent.length}</span>
+                        </>
+                      ) : statementFile ? (
+                        <span>File selected: {statementFile.name}</span>
+                      ) : (
+                        <span>No content added yet</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Display Statements List */}
+                {formData.writtenStatements.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {formData.writtenStatements.map((statement) => (
+                      <div key={statement.id} className="bg-gray-50 px-4 py-3 rounded-lg border border-gray-200 hover:border-[#3282B8]/50 transition-colors">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-start gap-3 flex-1 min-w-0">
+                            {statement.file ? (
+                              <>
+                                {getFileIcon(statement.fileName || '')}
+                                <div className="min-w-0">
+                                  <p className="text-sm font-bold text-gray-800">{statement.title}</p>
+                                  <p className="text-xs text-gray-400">
+                                    File: {statement.fileName} ({(statement.fileSize / 1024).toFixed(1)} KB)
+                                  </p>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <FaFileAlt className="text-green-500 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-bold text-gray-800">{statement.title}</p>
+                                  <p className="text-xs text-gray-400">
+                                    {statement.content.trim().split(/\s+/).filter(w => w).length} words • {statement.content.length} characters
+                                  </p>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleViewStatement(statement)}
+                              className="text-[#0F4C75] hover:text-[#3282B8] transition-colors p-1 hover:bg-blue-50 rounded-lg"
+                              title="View"
+                            >
+                              <FaEye className="text-sm" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadStatement(statement)}
+                              className="text-[#0F4C75] hover:text-[#3282B8] transition-colors p-1 hover:bg-blue-50 rounded-lg"
+                              title="Download"
+                            >
+                              <FaDownload className="text-sm" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handlePrintStatement(statement)}
+                              className="text-[#0F4C75] hover:text-[#3282B8] transition-colors p-1 hover:bg-blue-50 rounded-lg"
+                              title="Print"
+                            >
+                              <FaPrint className="text-sm" />
+                            </button>
+                            {!statement.file && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenStatementEditor(statement)}
+                                className="text-[#0F4C75] hover:text-[#3282B8] transition-colors p-1 hover:bg-blue-50 rounded-lg"
+                                title="Edit"
+                              >
+                                <FaEdit className="text-sm" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveStatement(statement.id)}
+                              className="text-red-500 hover:text-red-700 transition-colors p-1 hover:bg-red-50 rounded-lg"
+                              title="Remove"
+                            >
+                              <FaTrash className="text-sm" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* ===== LAW OFFICER / DEPARTMENTAL REPRESENTATIVE ===== */}
+              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                <h3 className="text-sm font-semibold text-[#0F4C75] mb-3 flex items-center gap-2">
+                  <FaUser className="text-sm" />
+                  Law officer / Departmental Representative
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Type *</label>
+                    <select
+                      name="type"
+                      value={formData.lawOfficer.type}
+                      onChange={handleLawOfficerChange}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] focus:border-transparent transition-all duration-200 bg-white text-gray-900 text-sm"
+                    >
+                      {lawOfficerTypes.map(type => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Name *</label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={formData.lawOfficer.name}
+                      onChange={handleLawOfficerChange}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] focus:border-transparent transition-all duration-200 bg-white text-gray-900 text-sm"
+                      placeholder="e.g. Mr. Usman Chatha"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Designation *</label>
+                    <input
+                      type="text"
+                      name="designation"
+                      value={formData.lawOfficer.designation}
+                      onChange={handleLawOfficerChange}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] focus:border-transparent transition-all duration-200 bg-white text-gray-900 text-sm"
+                      placeholder="e.g. Head Clerk"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Office Address *</label>
+                    <input
+                      type="text"
+                      name="officeAddress"
+                      value={formData.lawOfficer.officeAddress}
+                      onChange={handleLawOfficerChange}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] focus:border-transparent transition-all duration-200 bg-white text-gray-900 text-sm"
+                      placeholder="e.g. AC, Office Ferozewala"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Official Number *</label>
+                    <input
+                      type="text"
+                      name="officialNumber"
+                      value={formData.lawOfficer.officialNumber}
+                      onChange={handleLawOfficerChange}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] focus:border-transparent transition-all duration-200 bg-white text-gray-900 text-sm"
+                      placeholder="e.g. 03004370188"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Cell Number *</label>
+                    <input
+                      type="text"
+                      name="cellNumber"
+                      value={formData.lawOfficer.cellNumber}
+                      onChange={handleLawOfficerChange}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] focus:border-transparent transition-all duration-200 bg-white text-gray-900 text-sm"
+                      placeholder="e.g. 03004370188"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* ===== ALTERNATE LAW OFFICER ===== */}
+              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                <h3 className="text-sm font-semibold text-[#0F4C75] mb-3 flex items-center gap-2">
+                  <FaUser className="text-sm" />
+                  Alternate Law officer / Departmental Representative
+                </h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Type *</label>
+                    <select
+                      name="type"
+                      value={formData.alternateLawOfficer.type}
+                      onChange={handleAlternateLawOfficerChange}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] focus:border-transparent transition-all duration-200 bg-white text-gray-900 text-sm"
+                    >
+                      {lawOfficerTypes.map(type => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Name</label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={formData.alternateLawOfficer.name}
+                      onChange={handleAlternateLawOfficerChange}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] focus:border-transparent transition-all duration-200 bg-white text-gray-900 text-sm"
+                      placeholder="e.g. Mr. Rai Javed Iqbal"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Designation</label>
+                    <input
+                      type="text"
+                      name="designation"
+                      value={formData.alternateLawOfficer.designation}
+                      onChange={handleAlternateLawOfficerChange}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] focus:border-transparent transition-all duration-200 bg-white text-gray-900 text-sm"
+                      placeholder="e.g. Girdawar"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Office Address</label>
+                    <input
+                      type="text"
+                      name="officeAddress"
+                      value={formData.alternateLawOfficer.officeAddress}
+                      onChange={handleAlternateLawOfficerChange}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] focus:border-transparent transition-all duration-200 bg-white text-gray-900 text-sm"
+                      placeholder="e.g. AC, Office Ferozewala"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Official Number</label>
+                    <input
+                      type="text"
+                      name="officialNumber"
+                      value={formData.alternateLawOfficer.officialNumber}
+                      onChange={handleAlternateLawOfficerChange}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] focus:border-transparent transition-all duration-200 bg-white text-gray-900 text-sm"
+                      placeholder="e.g. 03004241206"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Cell Number</label>
+                    <input
+                      type="text"
+                      name="cellNumber"
+                      value={formData.alternateLawOfficer.cellNumber}
+                      onChange={handleAlternateLawOfficerChange}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#3282B8] focus:border-transparent transition-all duration-200 bg-white text-gray-900 text-sm"
+                      placeholder="e.g. 03004241206"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* ===== FORM ACTIONS ===== */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-6 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all duration-200"
+                  disabled={loading}
+                >
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-8 py-2.5 bg-[#0F4C75] text-white text-sm font-medium rounded-lg hover:bg-[#1B262C] transition-all duration-300 shadow-sm shadow-[#0F4C75]/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                      </svg>
+                      Saving...
+                    </>
+                  ) : (
+                    'Save'
+                  )}
+                </button>
+              </div>
+
+            </form>
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 
-export default CaseDetailModal;
+export default AddCaseModal;
