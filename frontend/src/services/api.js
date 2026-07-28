@@ -1,9 +1,10 @@
 // src/services/api.js
 import axios from 'axios';
+import { config } from '../config';
 
 // ✅ FIX: Use relative URL for development with proxy
 // The proxy will forward /api to http://localhost:5000/api
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api' : config.api.baseURL);
 const API_TIMEOUT = parseInt(import.meta.env.VITE_API_TIMEOUT) || 30000;
 
 // Create axios instance

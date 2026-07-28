@@ -18,7 +18,7 @@ const getApiUrl = () => {
     return '/api';
   }
   // For production
-  return '/api';
+  return config.api.baseURL;
 };
 
 const API_URL = getApiUrl();
