@@ -9,16 +9,22 @@ import { config } from '../config';
 // 🔥 FIX: Use relative URL for development (will use proxy)
 // For production, use the full URL
 const getApiUrl = () => {
-  // If running in development with ngrok, use the ngrok URL
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
+  let url = import.meta.env.VITE_API_URL;
+  
+  if (!url) {
+    if (import.meta.env.DEV) {
+      url = '/api';
+    } else {
+      url = config.api.baseURL;
+    }
   }
-  // For local development with proxy
-  if (import.meta.env.DEV) {
-    return '/api';
+  
+  // Ensure URL ends with /api to prevent Route Not Found errors
+  if (url && url !== '/api' && !url.endsWith('/api')) {
+    url = `${url.replace(/\/+$/, '')}/api`;
   }
-  // For production
-  return config.api.baseURL;
+  
+  return url;
 };
 
 const API_URL = getApiUrl();
