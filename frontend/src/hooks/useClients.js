@@ -3,7 +3,10 @@ import { useState, useCallback, useEffect } from 'react';
 
 // ✅ FIX: Use relative URL for development with proxy
 // The proxy will forward /api to http://localhost:5000/api
-const API_URL = '/api';
+let API_URL = import.meta.env.VITE_API_URL || '/api';
+if (API_URL && API_URL !== '/api' && !API_URL.endsWith('/api')) {
+  API_URL = `${API_URL.replace(/\/+$/, '')}/api`;
+}
 
 export const useClients = () => {
   const [clients, setClients] = useState([]);
@@ -15,6 +18,7 @@ export const useClients = () => {
     const headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
     };
     
     if (token) {
