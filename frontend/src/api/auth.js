@@ -12,8 +12,17 @@ export const authAPI = {
   /** Register new user */
   register: (data) => api.post('/auth/register', data),
   
-  /** Login user */
-  login: (data) => api.post('/auth/login', data),
+  /** Login user - FIXED */
+  login: async (data) => {
+    try {
+      const response = await api.post('/auth/login', data);
+      console.log('🔐 Login API response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ Login API error:', error);
+      throw error;
+    }
+  },
   
   /** Logout user */
   logout: () => api.post('/auth/logout'),
@@ -31,8 +40,17 @@ export const authAPI = {
   // User Profile Management
   // ============================================
   
-  /** Get current user profile */
-  getMe: () => api.get('/auth/me'),
+  /** Get current user profile - FIXED */
+  getMe: async () => {
+    try {
+      const response = await api.get('/auth/me');
+      console.log('👤 GetMe API response:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ GetMe API error:', error);
+      throw error;
+    }
+  },
   
   /** Update user profile */
   updateProfile: (data) => api.put('/auth/profile', data),

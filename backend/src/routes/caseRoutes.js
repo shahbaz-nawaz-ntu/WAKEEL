@@ -13,10 +13,27 @@ router.get('/', authenticateToken, async (req, res) => {
     console.log(`📊 Found ${cases.length} cases`);
     
     const formattedCases = cases.map(c => {
-      const obj = c.toJSON();
+      const obj = c.toJSON ? c.toJSON() : { ...c };
       return {
         ...obj,
-        id: obj._id.toString()
+        id: obj._id?.toString() || obj.id,
+        // ✅ Ensure all fields are present
+        nameOfCourt: obj.nameOfCourt || '',
+        natureOfCase: obj.natureOfCase || '',
+        nextDateOfHearing: obj.nextDateOfHearing || '',
+        copyOfSummon: obj.copyOfSummon || '',
+        copyOfPlaint: obj.copyOfPlaint || '',
+        relevantDepartmentalRecord: obj.relevantDepartmentalRecord || '',
+        lawOfficer: obj.lawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
+        alternateLawOfficer: obj.alternateLawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
+        writtenStatements: obj.writtenStatements || [],
+        attachments: obj.attachments || {},
+        courtDetails: obj.courtDetails || {},
+        caseNature: obj.caseNature || {},
+        division: obj.division || '',
+        district: obj.district || '',
+        plaintiff: obj.plaintiff || '',
+        defendant: obj.defendant || '',
       };
     });
     
@@ -41,12 +58,22 @@ router.get('/:id', authenticateToken, async (req, res) => {
     if (!caseItem) {
       return res.status(404).json({ success: false, error: 'Case not found' });
     }
-    const obj = caseItem.toJSON();
+    const obj = caseItem.toJSON ? caseItem.toJSON() : { ...caseItem };
     res.json({ 
       success: true, 
       data: {
         ...obj,
-        id: obj._id.toString()
+        id: obj._id?.toString() || obj.id,
+        // ✅ Ensure all fields are present
+        nameOfCourt: obj.nameOfCourt || '',
+        natureOfCase: obj.natureOfCase || '',
+        nextDateOfHearing: obj.nextDateOfHearing || '',
+        copyOfSummon: obj.copyOfSummon || '',
+        copyOfPlaint: obj.copyOfPlaint || '',
+        relevantDepartmentalRecord: obj.relevantDepartmentalRecord || '',
+        lawOfficer: obj.lawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
+        alternateLawOfficer: obj.alternateLawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
+        writtenStatements: obj.writtenStatements || [],
       }
     });
   } catch (error) {
@@ -58,7 +85,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 // ✅ FIXED: POST new case - Now saves ALL fields
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    console.log('📝 Creating new case with data:', req.body);
+    console.log('📝 Creating new case with data:', JSON.stringify(req.body, null, 2));
     
     // Get the last case number to generate next number
     const lastCase = await Case.findOne().sort({ caseNumber: -1 });
@@ -70,7 +97,7 @@ router.post('/', authenticateToken, async (req, res) => {
       }
     }
     
-    // ✅ COMPLETE CASE DATA - ALL FIELDS
+    // ✅ COMPLETE CASE DATA - ALL FIELDS FROM ADD CASE MODAL
     const caseData = {
       // Case Identification
       caseNumber: req.body.caseNumber || `2024-CV-${String(nextNumber).padStart(4, '0')}`,
@@ -84,6 +111,48 @@ router.post('/', authenticateToken, async (req, res) => {
       description: req.body.description || '',
       party: req.body.party || 'N/A',
       
+      // ✅ Fields from AddCaseModal
+      division: req.body.division || '',
+      district: req.body.district || '',
+      plaintiff: req.body.plaintiff || '',
+      defendant: req.body.defendant || '',
+      nameOfCourt: req.body.nameOfCourt || '',
+      natureOfCase: req.body.natureOfCase || '',
+      nextDateOfHearing: req.body.nextDateOfHearing || '',
+      
+      // ✅ Attachments - Direct fields
+      copyOfSummon: req.body.copyOfSummon || '',
+      copyOfPlaint: req.body.copyOfPlaint || '',
+      relevantDepartmentalRecord: req.body.relevantDepartmentalRecord || '',
+      
+      // ✅ Attachments - Nested
+      attachments: {
+        copyOfSummon: req.body.copyOfSummon || req.body.attachments?.copyOfSummon || '',
+        copyOfPlaint: req.body.copyOfPlaint || req.body.attachments?.copyOfPlaint || '',
+        relevantDepartmentalRecord: req.body.relevantDepartmentalRecord || req.body.attachments?.relevantDepartmentalRecord || '',
+      },
+      
+      // ✅ Law Officers
+      lawOfficer: req.body.lawOfficer || { 
+        type: 'Department Representative', 
+        name: '', 
+        designation: '', 
+        officeAddress: '', 
+        officialNumber: '', 
+        cellNumber: '' 
+      },
+      alternateLawOfficer: req.body.alternateLawOfficer || { 
+        type: 'Department Representative', 
+        name: '', 
+        designation: '', 
+        officeAddress: '', 
+        officialNumber: '', 
+        cellNumber: '' 
+      },
+      
+      // ✅ Written Statements
+      writtenStatements: req.body.writtenStatements || [],
+      
       // Status & Priority
       status: req.body.status || 'active',
       priority: req.body.priority || 'Medium',
@@ -91,16 +160,16 @@ router.post('/', authenticateToken, async (req, res) => {
       
       // Case Nature
       caseNature: {
-        trial: req.body.trial || req.body.caseNature?.trial || '',
-        appeal: req.body.appeal || req.body.caseNature?.appeal || '',
+        trial: req.body.natureOfCase || req.body.caseNature?.trial || '',
+        appeal: req.body.caseNature?.appeal || '',
       },
       
       // Court Details
       courtDetails: {
-        courtName: req.body.courtName || req.body.courtDetails?.courtName || '',
+        courtName: req.body.nameOfCourt || req.body.courtDetails?.courtName || '',
         district: req.body.district || req.body.courtDetails?.district || '',
-        courtPreviousDate: req.body.courtPreviousDate || req.body.courtDetails?.courtPreviousDate || '',
-        nextDate: req.body.nextDate || req.body.courtDetails?.nextDate || '',
+        courtPreviousDate: req.body.courtDetails?.courtPreviousDate || '',
+        nextDate: req.body.nextDateOfHearing || req.body.courtDetails?.nextDate || '',
       },
       
       // Remarks
@@ -112,8 +181,8 @@ router.post('/', authenticateToken, async (req, res) => {
       
       // Associate
       associate: {
-        name: req.body.associateName || req.body.associate?.name || '',
-        district: req.body.associateDistrict || req.body.associate?.district || '',
+        name: req.body.associate?.name || '',
+        district: req.body.associate?.district || '',
       },
       
       // Additional fields
@@ -123,13 +192,14 @@ router.post('/', authenticateToken, async (req, res) => {
       assignedTo: req.body.assignedTo || 'N/A',
       location: req.body.location || 'N/A',
       court: req.body.court || 'N/A',
-      nexthearing: req.body.nexthearing || 'N/A',
+      nexthearing: req.body.nexthearing || req.body.nextDateOfHearing || 'N/A',
       hearings: parseInt(req.body.hearings) || 0,
       documentsCount: parseInt(req.body.documentsCount) || 0,
       date: req.body.date || new Date().toISOString().split('T')[0],
       
       // User
       userId: req.user.id,
+      createdBy: req.user.id,
     };
     
     console.log('📝 Final case data:', JSON.stringify(caseData, null, 2));
@@ -138,10 +208,19 @@ router.post('/', authenticateToken, async (req, res) => {
     const savedCase = await newCase.save();
     console.log('✅ Case created:', savedCase._id);
     
-    const obj = savedCase.toJSON();
+    const obj = savedCase.toJSON ? savedCase.toJSON() : { ...savedCase };
     const formattedCase = {
       ...obj,
-      id: obj._id.toString()
+      id: obj._id?.toString() || obj.id,
+      nameOfCourt: obj.nameOfCourt || '',
+      natureOfCase: obj.natureOfCase || '',
+      nextDateOfHearing: obj.nextDateOfHearing || '',
+      copyOfSummon: obj.copyOfSummon || '',
+      copyOfPlaint: obj.copyOfPlaint || '',
+      relevantDepartmentalRecord: obj.relevantDepartmentalRecord || '',
+      lawOfficer: obj.lawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
+      alternateLawOfficer: obj.alternateLawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
+      writtenStatements: obj.writtenStatements || [],
     };
     
     res.status(201).json({ 
@@ -150,7 +229,11 @@ router.post('/', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error creating case:', error);
-    res.status(400).json({ success: false, error: error.message });
+    res.status(400).json({ 
+      success: false, 
+      error: error.message,
+      stack: error.stack 
+    });
   }
 });
 
@@ -183,6 +266,48 @@ router.put('/:id', authenticateToken, async (req, res) => {
       description: req.body.description !== undefined ? req.body.description : existingCase.description,
       party: req.body.party || existingCase.party || 'N/A',
       
+      // ✅ Fields from AddCaseModal
+      division: req.body.division || existingCase.division || '',
+      district: req.body.district || existingCase.district || '',
+      plaintiff: req.body.plaintiff || existingCase.plaintiff || '',
+      defendant: req.body.defendant || existingCase.defendant || '',
+      nameOfCourt: req.body.nameOfCourt || existingCase.nameOfCourt || '',
+      natureOfCase: req.body.natureOfCase || existingCase.natureOfCase || '',
+      nextDateOfHearing: req.body.nextDateOfHearing || existingCase.nextDateOfHearing || '',
+      
+      // ✅ Attachments - Direct fields
+      copyOfSummon: req.body.copyOfSummon || existingCase.copyOfSummon || '',
+      copyOfPlaint: req.body.copyOfPlaint || existingCase.copyOfPlaint || '',
+      relevantDepartmentalRecord: req.body.relevantDepartmentalRecord || existingCase.relevantDepartmentalRecord || '',
+      
+      // ✅ Attachments - Nested
+      attachments: {
+        copyOfSummon: req.body.copyOfSummon || req.body.attachments?.copyOfSummon || existingCase.attachments?.copyOfSummon || '',
+        copyOfPlaint: req.body.copyOfPlaint || req.body.attachments?.copyOfPlaint || existingCase.attachments?.copyOfPlaint || '',
+        relevantDepartmentalRecord: req.body.relevantDepartmentalRecord || req.body.attachments?.relevantDepartmentalRecord || existingCase.attachments?.relevantDepartmentalRecord || '',
+      },
+      
+      // ✅ Law Officers
+      lawOfficer: req.body.lawOfficer || existingCase.lawOfficer || { 
+        type: 'Department Representative', 
+        name: '', 
+        designation: '', 
+        officeAddress: '', 
+        officialNumber: '', 
+        cellNumber: '' 
+      },
+      alternateLawOfficer: req.body.alternateLawOfficer || existingCase.alternateLawOfficer || { 
+        type: 'Department Representative', 
+        name: '', 
+        designation: '', 
+        officeAddress: '', 
+        officialNumber: '', 
+        cellNumber: '' 
+      },
+      
+      // ✅ Written Statements
+      writtenStatements: req.body.writtenStatements || existingCase.writtenStatements || [],
+      
       // Status & Priority
       status: req.body.status || existingCase.status,
       priority: req.body.priority || existingCase.priority,
@@ -190,16 +315,16 @@ router.put('/:id', authenticateToken, async (req, res) => {
       
       // Case Nature
       caseNature: {
-        trial: req.body.trial || req.body.caseNature?.trial || existingCase.caseNature?.trial || '',
-        appeal: req.body.appeal || req.body.caseNature?.appeal || existingCase.caseNature?.appeal || '',
+        trial: req.body.natureOfCase || req.body.caseNature?.trial || existingCase.caseNature?.trial || '',
+        appeal: req.body.caseNature?.appeal || existingCase.caseNature?.appeal || '',
       },
       
       // Court Details
       courtDetails: {
-        courtName: req.body.courtName || req.body.courtDetails?.courtName || existingCase.courtDetails?.courtName || '',
+        courtName: req.body.nameOfCourt || req.body.courtDetails?.courtName || existingCase.courtDetails?.courtName || '',
         district: req.body.district || req.body.courtDetails?.district || existingCase.courtDetails?.district || '',
-        courtPreviousDate: req.body.courtPreviousDate || req.body.courtDetails?.courtPreviousDate || existingCase.courtDetails?.courtPreviousDate || '',
-        nextDate: req.body.nextDate || req.body.courtDetails?.nextDate || existingCase.courtDetails?.nextDate || '',
+        courtPreviousDate: req.body.courtDetails?.courtPreviousDate || existingCase.courtDetails?.courtPreviousDate || '',
+        nextDate: req.body.nextDateOfHearing || req.body.courtDetails?.nextDate || existingCase.courtDetails?.nextDate || '',
       },
       
       // Remarks
@@ -211,8 +336,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
       
       // Associate
       associate: {
-        name: req.body.associateName || req.body.associate?.name || existingCase.associate?.name || '',
-        district: req.body.associateDistrict || req.body.associate?.district || existingCase.associate?.district || '',
+        name: req.body.associate?.name || existingCase.associate?.name || '',
+        district: req.body.associate?.district || existingCase.associate?.district || '',
       },
       
       // Additional fields
@@ -222,7 +347,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
       assignedTo: req.body.assignedTo || existingCase.assignedTo || 'N/A',
       location: req.body.location || existingCase.location || 'N/A',
       court: req.body.court || existingCase.court || 'N/A',
-      nexthearing: req.body.nexthearing || existingCase.nexthearing || 'N/A',
+      nexthearing: req.body.nexthearing || req.body.nextDateOfHearing || existingCase.nexthearing || 'N/A',
       hearings: req.body.hearings !== undefined ? parseInt(req.body.hearings) : existingCase.hearings,
       documentsCount: req.body.documentsCount !== undefined ? parseInt(req.body.documentsCount) : existingCase.documentsCount,
       date: req.body.date || existingCase.date,
@@ -252,10 +377,19 @@ router.put('/:id', authenticateToken, async (req, res) => {
     
     console.log('✅ Case updated successfully:', updatedCase._id);
     
-    const obj = updatedCase.toJSON();
+    const obj = updatedCase.toJSON ? updatedCase.toJSON() : { ...updatedCase };
     const formattedCase = {
       ...obj,
-      id: obj._id.toString()
+      id: obj._id?.toString() || obj.id,
+      nameOfCourt: obj.nameOfCourt || '',
+      natureOfCase: obj.natureOfCase || '',
+      nextDateOfHearing: obj.nextDateOfHearing || '',
+      copyOfSummon: obj.copyOfSummon || '',
+      copyOfPlaint: obj.copyOfPlaint || '',
+      relevantDepartmentalRecord: obj.relevantDepartmentalRecord || '',
+      lawOfficer: obj.lawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
+      alternateLawOfficer: obj.alternateLawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
+      writtenStatements: obj.writtenStatements || [],
     };
     
     res.json({ 
@@ -301,10 +435,10 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
     
     console.log('✅ Case status updated:', updatedCase._id, '→', status);
     
-    const obj = updatedCase.toJSON();
+    const obj = updatedCase.toJSON ? updatedCase.toJSON() : { ...updatedCase };
     const formattedCase = {
       ...obj,
-      id: obj._id.toString()
+      id: obj._id?.toString() || obj.id,
     };
     
     res.json({ 

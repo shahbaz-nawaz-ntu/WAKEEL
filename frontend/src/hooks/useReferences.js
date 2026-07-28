@@ -1,7 +1,10 @@
 // src/hooks/useReferences.js
 import { useState, useCallback, useEffect } from 'react';
+import toast from 'react-hot-toast';
 
-const API_URL = 'https://2a95-2400-adc7-2918-d000-8cfe-551d-492d-ed50.ngrok-free.app/api';
+// ✅ FIX: Use relative URL for development with proxy
+// The proxy will forward /api to http://localhost:5000/api
+const API_URL = '/api';
 
 export const useReferences = () => {
   const [references, setReferences] = useState([]);
@@ -10,19 +13,23 @@ export const useReferences = () => {
 
   const getAuthHeader = () => {
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-    return {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
     };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    return { headers };
   };
 
   const fetchReferences = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      console.log('📚 Fetching references...');
+      console.log('📚 Fetching references from:', `${API_URL}/references`);
       const response = await fetch(`${API_URL}/references`, {
         method: 'GET',
         ...getAuthHeader(),
@@ -36,8 +43,12 @@ export const useReferences = () => {
       console.log('📚 Response data:', data);
 
       if (data.success && data.data) {
-        setReferences(data.data);
-        return { success: true, data: data.data };
+        const formattedReferences = data.data.map(ref => ({
+          ...ref,
+          id: ref.id || ref._id
+        }));
+        setReferences(formattedReferences);
+        return { success: true, data: formattedReferences };
       }
       return { success: false, error: data.error || 'Failed to fetch references' };
     } catch (err) {
@@ -65,9 +76,13 @@ export const useReferences = () => {
       console.log('📤 Add reference response:', result);
 
       if (result.success && result.data) {
-        setReferences(prev => [result.data, ...prev]);
+        const newReference = {
+          ...result.data,
+          id: result.data.id || result.data._id
+        };
+        setReferences(prev => [newReference, ...prev]);
         toast.success('✅ Reference case added successfully!');
-        return { success: true, data: result.data };
+        return { success: true, data: newReference };
       }
       toast.error(result.error || 'Failed to add reference');
       return { success: false, error: result.error || 'Failed to add reference' };
@@ -96,11 +111,15 @@ export const useReferences = () => {
       console.log('📝 Update reference response:', result);
 
       if (result.success && result.data) {
+        const updatedReference = {
+          ...result.data,
+          id: result.data.id || result.data._id
+        };
         setReferences(prev => prev.map(r => 
-          (r.id === id || r._id === id) ? result.data : r
+          (r.id === id || r._id === id) ? updatedReference : r
         ));
         toast.success('✅ Reference updated successfully!');
-        return { success: true, data: result.data };
+        return { success: true, data: updatedReference };
       }
       toast.error(result.error || 'Failed to update reference');
       return { success: false, error: result.error || 'Failed to update reference' };

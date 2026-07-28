@@ -1,8 +1,8 @@
-// src/hooks/useProceedings.js
+// src/hooks/useProceedings.js - EMERGENCY FIX
 import { useState, useCallback, useEffect } from 'react';
 import toast from 'react-hot-toast';
 
-const API_URL = 'https://2a95-2400-adc7-2918-d000-8cfe-551d-492d-ed50.ngrok-free.app/api';
+const API_URL = '/api';
 
 export const useProceedings = () => {
   const [proceedings, setProceedings] = useState([]);
@@ -11,20 +11,29 @@ export const useProceedings = () => {
 
   const getAuthHeader = () => {
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-    return {
-      headers: {
-        'Authorization': token ? `Bearer ${token}` : '',
-        'Content-Type': 'application/json',
-      },
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
     };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    return { headers };
   };
 
-  // Fetch all proceedings
+  // ============================================
+  // fetchProceedings - EMERGENCY FIX ✅
+  // ============================================
   const fetchProceedings = useCallback(async () => {
+    console.log('📋 FETCHING PROCEEDINGS - STARTED');
+    
     setLoading(true);
     setError(null);
+    
     try {
-      console.log('📋 Fetching proceedings...');
+      console.log('📋 Calling API:', `${API_URL}/proceedings`);
       const response = await fetch(`${API_URL}/proceedings`, {
         method: 'GET',
         ...getAuthHeader(),
@@ -39,27 +48,66 @@ export const useProceedings = () => {
       const data = await response.json();
       console.log('📋 Response data:', data);
 
+      let proceedingsData = [];
       if (data.success && data.data) {
-        console.log('✅ Proceedings loaded:', data.data.length);
-        const formatted = data.data.map(item => ({
-          ...item,
-          id: item.id || item._id
-        }));
-        setProceedings(formatted);
-        return { success: true, data: formatted };
+        proceedingsData = data.data;
+      } else if (Array.isArray(data)) {
+        proceedingsData = data;
+      } else if (data.data && Array.isArray(data.data)) {
+        proceedingsData = data.data;
+      } else {
+        console.warn('⚠️ Unexpected response format:', data);
+        proceedingsData = [];
       }
+
+      console.log('✅ Extracted:', proceedingsData.length, 'proceedings');
+
+      // Format each proceeding
+      const formatted = proceedingsData.map(item => {
+        let caseId = null;
+        if (item.caseId) {
+          if (typeof item.caseId === 'string') {
+            caseId = item.caseId;
+          } else if (typeof item.caseId === 'object') {
+            caseId = item.caseId._id || item.caseId.id || null;
+          }
+        }
+        if (!caseId && item.case) {
+          if (typeof item.case === 'string') {
+            caseId = item.case;
+          } else if (typeof item.case === 'object') {
+            caseId = item.case._id || item.case.id || null;
+          }
+        }
+        
+        return {
+          ...item,
+          id: item.id || item._id,
+          caseId: caseId || item.caseId
+        };
+      });
       
-      throw new Error(data.error || 'Failed to fetch proceedings');
+      console.log('✅ Formatted:', formatted.length, 'proceedings');
+      
+      // ✅ UPDATE STATE
+      setProceedings(formatted);
+      console.log('✅ State updated with', formatted.length, 'proceedings');
+      
+      return { success: true, data: formatted };
+      
     } catch (err) {
       console.error('❌ Error fetching proceedings:', err);
       setError(err.message);
       return { success: false, error: err.message };
     } finally {
       setLoading(false);
+      console.log('📋 FETCHING PROCEEDINGS - ENDED');
     }
   }, []);
 
-  // Fetch proceedings for a specific case
+  // ============================================
+  // fetchProceedingsByCase
+  // ============================================
   const fetchProceedingsByCase = useCallback(async (caseId) => {
     setLoading(true);
     setError(null);
@@ -77,16 +125,24 @@ export const useProceedings = () => {
       const data = await response.json();
       console.log('📋 Case proceedings response:', data);
 
+      let proceedingsData = [];
       if (data.success && data.data) {
-        const formatted = data.data.map(item => ({
-          ...item,
-          id: item.id || item._id
-        }));
-        setProceedings(formatted);
-        return { success: true, data: formatted };
+        proceedingsData = data.data;
+      } else if (Array.isArray(data)) {
+        proceedingsData = data;
+      } else if (data.data && Array.isArray(data.data)) {
+        proceedingsData = data.data;
       }
+
+      const formatted = proceedingsData.map(item => ({
+        ...item,
+        id: item.id || item._id,
+        caseId: item.caseId?._id || item.caseId || caseId
+      }));
       
-      throw new Error(data.error || 'Failed to fetch proceedings');
+      setProceedings(formatted);
+      return { success: true, data: formatted };
+      
     } catch (err) {
       console.error('❌ Error fetching case proceedings:', err);
       setError(err.message);
@@ -96,12 +152,18 @@ export const useProceedings = () => {
     }
   }, []);
 
-  // Add proceeding
+  // ============================================
+  // addProceeding
+  // ============================================
   const addProceeding = useCallback(async (proceedingData) => {
     setLoading(true);
     setError(null);
     try {
       console.log('📝 Adding new proceeding:', proceedingData);
+      
+      if (!proceedingData.caseId) {
+        throw new Error('Case ID is required');
+      }
       
       const response = await fetch(`${API_URL}/proceedings`, {
         method: 'POST',
@@ -112,28 +174,49 @@ export const useProceedings = () => {
       const result = await response.json();
       console.log('📝 Add proceeding response:', result);
 
-      if (result.success && result.data) {
-        const newProceeding = {
-          ...result.data,
-          id: result.data.id || result.data._id
-        };
-        setProceedings(prev => [newProceeding, ...prev]);
-        console.log('✅ Proceeding added:', newProceeding);
-        toast.success('Proceeding added successfully! ✅');
-        return { success: true, data: newProceeding };
+      let newProceeding = result.success ? result.data : result;
+      
+      if (!newProceeding || !newProceeding._id) {
+        throw new Error('Invalid response format');
       }
-      toast.error(result.error || 'Failed to add proceeding');
-      return { success: false, error: result.error || 'Failed to add proceeding' };
+
+      let caseId = newProceeding.caseId;
+      if (caseId && typeof caseId === 'object') {
+        caseId = caseId._id || caseId.id || proceedingData.caseId;
+      }
+      
+      const formattedProceeding = {
+        ...newProceeding,
+        id: newProceeding.id || newProceeding._id,
+        caseId: caseId || proceedingData.caseId
+      };
+      
+      setProceedings(prev => {
+        const exists = prev.some(p => p.id === formattedProceeding.id || p._id === formattedProceeding._id);
+        if (exists) {
+          console.log('⚠️ Proceeding already exists, updating instead');
+          return prev.map(p => (p.id === formattedProceeding.id || p._id === formattedProceeding._id) ? formattedProceeding : p);
+        }
+        console.log('✅ Adding new proceeding to state');
+        return [formattedProceeding, ...prev];
+      });
+      
+      console.log('✅ Proceeding added successfully');
+      toast.success('Proceeding added successfully! ✅');
+      return { success: true, data: formattedProceeding };
+      
     } catch (err) {
       console.error('❌ Add proceeding error:', err);
-      toast.error('Failed to add proceeding');
+      toast.error(err.message || 'Failed to add proceeding');
       return { success: false, error: err.message };
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Update proceeding
+  // ============================================
+  // updateProceeding
+  // ============================================
   const updateProceeding = useCallback(async (id, updatedData) => {
     setLoading(true);
     setError(null);
@@ -149,30 +232,73 @@ export const useProceedings = () => {
       const result = await response.json();
       console.log('📝 Update proceeding response:', result);
 
-      if (result.success && result.data) {
-        const updated = {
-          ...result.data,
-          id: result.data.id || result.data._id
-        };
-        setProceedings(prev => prev.map(item => 
-          (item.id === id || item._id === id) ? updated : item
-        ));
-        console.log('✅ Proceeding updated:', updated);
-        toast.success('Proceeding updated! 📝');
-        return { success: true, data: updated };
+      let updated = result.success ? result.data : result;
+      
+      if (!updated || !updated._id) {
+        throw new Error('Invalid response format');
       }
-      toast.error(result.error || 'Failed to update proceeding');
-      return { success: false, error: result.error || 'Failed to update proceeding' };
+
+      const formatted = {
+        ...updated,
+        id: updated.id || updated._id,
+        caseId: updated.caseId?._id || updated.caseId
+      };
+      
+      setProceedings(prev => prev.map(item => 
+        (item.id === id || item._id === id) ? formatted : item
+      ));
+      
+      console.log('✅ Proceeding updated:', formatted);
+      toast.success('Proceeding updated! 📝');
+      return { success: true, data: formatted };
+      
     } catch (err) {
       console.error('❌ Update proceeding error:', err);
-      toast.error('Failed to update proceeding');
+      toast.error(err.message || 'Failed to update proceeding');
       return { success: false, error: err.message };
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Update proceeding status
+  // ============================================
+  // deleteProceeding
+  // ============================================
+  const deleteProceeding = useCallback(async (id) => {
+    setLoading(true);
+    setError(null);
+    try {
+      console.log(`🗑️ Deleting proceeding: ${id}`);
+      
+      const response = await fetch(`${API_URL}/proceedings/${id}`, {
+        method: 'DELETE',
+        ...getAuthHeader(),
+      });
+
+      const result = await response.json();
+      console.log('🗑️ Delete proceeding response:', result);
+
+      if (result.success !== false) {
+        setProceedings(prev => prev.filter(item => (item.id !== id && item._id !== id)));
+        console.log('✅ Proceeding deleted:', id);
+        toast.success('Proceeding deleted! 🗑️');
+        return { success: true };
+      }
+      
+      throw new Error(result.error || 'Failed to delete proceeding');
+      
+    } catch (err) {
+      console.error('❌ Delete proceeding error:', err);
+      toast.error(err.message || 'Failed to delete proceeding');
+      return { success: false, error: err.message };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // ============================================
+  // updateProceedingStatus
+  // ============================================
   const updateProceedingStatus = useCallback(async (id, status) => {
     setLoading(true);
     setError(null);
@@ -191,7 +317,8 @@ export const useProceedings = () => {
       if (result.success && result.data) {
         const updated = {
           ...result.data,
-          id: result.data.id || result.data._id
+          id: result.data.id || result.data._id,
+          caseId: result.data.caseId?._id || result.data.caseId
         };
         setProceedings(prev => prev.map(item => 
           (item.id === id || item._id === id) ? updated : item
@@ -211,7 +338,9 @@ export const useProceedings = () => {
     }
   }, []);
 
-  // ✅ UPLOAD DOCUMENT
+  // ============================================
+  // uploadDocument
+  // ============================================
   const uploadDocument = useCallback(async (proceedingId, docType, file) => {
     setLoading(true);
     setError(null);
@@ -252,7 +381,9 @@ export const useProceedings = () => {
     }
   }, []);
 
-  // ✅ DELETE DOCUMENT
+  // ============================================
+  // deleteDocument
+  // ============================================
   const deleteDocument = useCallback(async (proceedingId, docType, docIndex) => {
     setLoading(true);
     setError(null);
@@ -286,7 +417,9 @@ export const useProceedings = () => {
     }
   }, []);
 
-  // ✅ VIEW DOCUMENT - FIXED (No toast.info)
+  // ============================================
+  // viewDocument
+  // ============================================
   const viewDocument = useCallback((proceedingId, docType, docIndex) => {
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
     
@@ -297,48 +430,40 @@ export const useProceedings = () => {
     
     console.log(`📄 Viewing document: ${docType}[${docIndex}] from proceeding ${proceedingId}`);
     
-    // Open in new tab with token in URL
     const url = `${API_URL}/proceedings/${proceedingId}/documents/${docType}/${docIndex}/file?token=${token}`;
     window.open(url, '_blank');
     toast.success('📄 Opening document...');
   }, []);
 
-  // Delete proceeding
-  const deleteProceeding = useCallback(async (id) => {
-    setLoading(true);
-    setError(null);
-    try {
-      console.log(`🗑️ Deleting proceeding: ${id}`);
-      
-      const response = await fetch(`${API_URL}/proceedings/${id}`, {
-        method: 'DELETE',
-        ...getAuthHeader(),
-      });
-
-      const result = await response.json();
-      console.log('🗑️ Delete proceeding response:', result);
-
-      if (result.success) {
-        setProceedings(prev => prev.filter(item => (item.id !== id && item._id !== id)));
-        console.log('✅ Proceeding deleted:', id);
-        toast.success('Proceeding deleted! 🗑️');
-        return { success: true };
-      }
-      toast.error(result.error || 'Failed to delete proceeding');
-      return { success: false, error: result.error || 'Failed to delete proceeding' };
-    } catch (err) {
-      console.error('❌ Delete proceeding error:', err);
-      toast.error('Failed to delete proceeding');
-      return { success: false, error: err.message };
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  // ============================================
   // Auto-fetch on mount
+  // ============================================
   useEffect(() => {
-    fetchProceedings();
+    let mounted = true;
+    
+    const fetchData = async () => {
+      if (mounted) {
+        console.log('📋 Auto-fetching proceedings on mount...');
+        await fetchProceedings();
+      }
+    };
+    
+    fetchData();
+    
+    return () => {
+      mounted = false;
+    };
   }, [fetchProceedings]);
+
+  // ============================================
+  // Debug effect
+  // ============================================
+  useEffect(() => {
+    console.log('📊 useProceedings - State updated:', proceedings.length, 'items');
+    if (proceedings.length > 0) {
+      console.log('📊 First proceeding caseId:', proceedings[0]?.caseId);
+    }
+  }, [proceedings]);
 
   return {
     proceedings,

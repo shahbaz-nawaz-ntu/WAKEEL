@@ -81,20 +81,18 @@ router.post('/:id/documents/:type', protect, upload.single('file'), uploadDocume
 router.delete('/:id/documents/:type/:index', protect, deleteDocument);
 
 // ✅ View document (NO protect middleware - handles auth manually)
-// This route checks both Authorization header and query param token
 router.get('/:id/documents/:type/:index/file', viewDocument);
 
 // ============================================
-// CRUD ROUTES (Protected)
+// 🚀 CRUD ROUTES (Protected)
 // ============================================
 
-// POST create proceeding
+// ✅ POST create proceeding
 router.post('/', protect, createProceeding);
 
-// GET, PUT, DELETE single proceeding
-router.route('/:id')
-  .get(protect, getProceeding)
-  .put(protect, updateProceeding)
-  .delete(protect, deleteProceeding);
+// ✅ GET, PUT, DELETE single proceeding
+router.get('/:id', protect, getProceeding);
+router.put('/:id', protect, updateProceeding);
+router.delete('/:id', protect, deleteProceeding);
 
 export default router;

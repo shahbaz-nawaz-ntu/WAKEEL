@@ -4,6 +4,9 @@ import { useCases } from '../hooks/useCases';
 import { useClients } from '../hooks/useClients';
 import { useEvents } from '../hooks/useEvents';
 import { useReferences } from '../hooks/useReferences';
+import { useProceedings } from '../hooks/useProceedings';
+import { useComments } from '../hooks/useComments';
+import { useParties } from '../hooks/useParties';
 import { useAuth } from '../hooks/useAuth';
 import Header from '../components/layout/Header';
 import HeroSection from '../components/layout/HeroSection';
@@ -32,8 +35,16 @@ import {
   FaCheckCircle,
   FaUsers,
   FaChartBar,
-  FaBook
+  FaBook,
+  FaFilter,
+  FaChevronDown,
+  FaChevronUp,
+  FaChevronLeft,
+  FaChevronRight,
+  FaFileAlt,
+  FaInfoCircle
 } from 'react-icons/fa';
+import toast from 'react-hot-toast';
 
 const Dashboard = () => {
   // ============================================
@@ -74,6 +85,33 @@ const Dashboard = () => {
     fetchReferences,
   } = useReferences();
 
+  const {
+    proceedings,
+    loading: proceedingsLoading,
+    addProceeding,
+    updateProceeding,
+    deleteProceeding,
+    fetchProceedings,
+  } = useProceedings();
+
+  const {
+    comments,
+    loading: commentsLoading,
+    addComment,
+    updateComment,
+    deleteComment,
+    fetchComments,
+  } = useComments();
+
+  const {
+    parties,
+    loading: partiesLoading,
+    addParty,
+    updateParty,
+    deleteParty,
+    fetchParties,
+  } = useParties();
+
   const { user } = useAuth();
 
   // ============================================
@@ -82,6 +120,15 @@ const Dashboard = () => {
   const [activePage, setActivePage] = useState('dashboard');
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedDepartment, setSelectedDepartment] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState('');
+  const [selectedYear, setSelectedYear] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [entriesPerPage, setEntriesPerPage] = useState(10);
+  const [showDepartmentDropdown, setShowDepartmentDropdown] = useState(false);
+  const [showMonthDropdown, setShowMonthDropdown] = useState(false);
+  const [showYearDropdown, setShowYearDropdown] = useState(false);
+  
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddReferenceModalOpen, setIsAddReferenceModalOpen] = useState(false);
@@ -90,17 +137,96 @@ const Dashboard = () => {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [deleteReferenceModal, setDeleteReferenceModal] = useState({ isOpen: false, reference: null });
 
+  const [modalKey, setModalKey] = useState(0);
+
+  // ============================================
+  // DEPARTMENT LIST
+  // ============================================
+  const departments = [
+    'Agriculture Department',
+    'Aquaculture and Fisheries Department',
+    'Board of Revenue Department',
+    'Chief Minister Inspection Team',
+    'Communication and Works Department',
+    'Cooperatives Department',
+    'Disaster Management Department',
+    'Energy Department',
+    'Environment Protection and Climate Change Department',
+    'Excise, Taxation and Narcotics Control Department',
+    'FBT Department',
+    'Finance Department',
+    'Food, Safety and Consumer Protection Department',
+    'Forestry and Wildlife Department',
+    'Health and Population Department',
+    'Home Department',
+    'Housing, Urban Development and Public Health Engineering Department',
+    'Human Rights and Minorities Affairs Department',
+    'Industries, Commerce and Investment Department',
+    'Information and Culture Department',
+    'Irrigation Department',
+    'Labour and Human Resource Department',
+    'Law and Parliamentary Affairs Department',
+    'Literacy and Non Formal Basic Education Department',
+    'Livestock and Dairy Development Department',
+    'Local Government and Community Development Department',
+    'Mines and Minerals Department',
+    'PITB Department',
+    'Planning and Development Board',
+    'Public Prosecution Department'
+  ];
+
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  const years = Array.from({ length: 11 }, (_, i) => (2020 + i).toString());
+
   // ============================================
   // FETCH DATA ON MOUNT
   // ============================================
   useEffect(() => {
     const loadData = async () => {
-      await fetchCases({ limit: 10 });
-      await fetchReferences();
-      setIsInitialLoad(false);
+      try {
+        console.log('🔄 Loading initial data...');
+        await fetchCases({ limit: 10 });
+        await fetchReferences();
+        await fetchProceedings();
+        await fetchComments();
+        await fetchParties();
+        console.log('✅ All data loaded');
+        console.log('📊 Proceedings count:', proceedings.length);
+      } catch (error) {
+        console.error('❌ Error loading data:', error);
+      } finally {
+        setIsInitialLoad(false);
+      }
     };
     loadData();
   }, []);
+
+  // ✅ FIX: FETCH PROCEEDINGS WHEN CASE IS SELECTED
+  useEffect(() => {
+    if (selectedCase) {
+      console.log('🔄 Case selected - fetching proceedings...');
+      const fetchData = async () => {
+        await fetchProceedings();
+        setModalKey(prev => prev + 1);
+        console.log('📊 Proceedings after fetch:', proceedings.length);
+      };
+      fetchData();
+    }
+  }, [selectedCase]);
+
+  // Monitor proceedings changes
+  useEffect(() => {
+    console.log('📊 Dashboard - proceedings count:', proceedings.length);
+  }, [proceedings]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedDepartment, selectedMonth, selectedYear, activeTab]);
 
   // ============================================
   // SOLVED CASES
@@ -120,20 +246,49 @@ const Dashboard = () => {
       filtered = filtered.filter(c => c.status === activeTab);
     }
 
-    if (searchQuery && searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
+    if (searchQuery) {
+      const term = searchQuery.toLowerCase();
       filtered = filtered.filter(c =>
-        c.caseTitle?.toLowerCase().includes(query) ||
-        c.title?.toLowerCase().includes(query) ||
-        c.caseNumber?.toLowerCase().includes(query) ||
-        c.party?.toLowerCase().includes(query) ||
-        c.description?.toLowerCase().includes(query) ||
-        c.caseType?.toLowerCase().includes(query)
+        c.caseNumber?.toLowerCase().includes(term) ||
+        c.caseTitle?.toLowerCase().includes(term) ||
+        c.title?.toLowerCase().includes(term) ||
+        c.party?.toLowerCase().includes(term) ||
+        c.plaintiff?.toLowerCase().includes(term) ||
+        c.defendant?.toLowerCase().includes(term) ||
+        c.department?.toLowerCase().includes(term) ||
+        c.caseType?.toLowerCase().includes(term)
       );
     }
 
+    if (selectedDepartment) {
+      filtered = filtered.filter(c => 
+        c.department === selectedDepartment ||
+        c.caseType === selectedDepartment ||
+        c.nameOfCourt === selectedDepartment
+      );
+    }
+
+    if (selectedMonth) {
+      const monthIndex = months.indexOf(selectedMonth) + 1;
+      filtered = filtered.filter(c => {
+        if (!c.nextHearingDate && !c.nextDate && !c.courtDetails?.nextDate) return false;
+        const date = c.nextHearingDate || c.nextDate || c.courtDetails?.nextDate;
+        const d = new Date(date);
+        return d.getMonth() + 1 === monthIndex;
+      });
+    }
+
+    if (selectedYear) {
+      filtered = filtered.filter(c => {
+        if (!c.nextHearingDate && !c.nextDate && !c.courtDetails?.nextDate) return false;
+        const date = c.nextHearingDate || c.nextDate || c.courtDetails?.nextDate;
+        const d = new Date(date);
+        return d.getFullYear().toString() === selectedYear;
+      });
+    }
+
     return filtered;
-  }, [cases, activeTab, searchQuery]);
+  }, [cases, activeTab, searchQuery, selectedDepartment, selectedMonth, selectedYear]);
 
   const stats = getStats();
 
@@ -148,6 +303,12 @@ const Dashboard = () => {
     { id: 'pending', label: 'Pending', count: filteredCases.filter(c => c.status === 'pending').length },
     { id: 'closed', label: 'Closed', count: filteredCases.filter(c => c.status === 'closed').length },
   ];
+
+  // Pagination
+  const totalPages = Math.ceil(filteredCases.length / entriesPerPage);
+  const startIndex = (currentPage - 1) * entriesPerPage;
+  const endIndex = startIndex + entriesPerPage;
+  const currentCases = filteredCases.slice(startIndex, endIndex);
 
   // ============================================
   // STATS CARDS DATA
@@ -185,31 +346,57 @@ const Dashboard = () => {
       bg: 'bg-gray-500/10',
       border: 'border-gray-500/20'
     },
-    { 
-      title: 'Clients', 
-      value: clients.length, 
-      icon: FaUsers, 
-      color: 'text-purple-400',
-      bg: 'bg-purple-500/10',
-      border: 'border-purple-500/20'
-    },
-    { 
-      title: 'Events', 
-      value: events.length, 
-      icon: FaCalendarAlt, 
-      color: 'text-rose-400',
-      bg: 'bg-rose-500/10',
-      border: 'border-rose-500/20'
-    },
-    { 
-      title: 'References', 
-      value: references.length, 
-      icon: FaBook, 
-      color: 'text-[#8B5CF6]',
-      bg: 'bg-[#8B5CF6]/10',
-      border: 'border-[#8B5CF6]/20'
-    },
   ];
+
+  // ============================================
+  // HELPERS
+  // ============================================
+  const getStatusBadge = (status) => {
+    if (!status) return 'bg-gray-100 text-gray-600 border-gray-200';
+    const s = status.toLowerCase();
+    if (s.includes('active')) 
+      return 'bg-green-50 text-green-700 border-green-200';
+    if (s.includes('pending')) 
+      return 'bg-amber-50 text-amber-700 border-amber-200';
+    if (s.includes('closed')) 
+      return 'bg-gray-50 text-gray-600 border-gray-200';
+    if (s.includes('adjournment')) 
+      return 'bg-blue-50 text-blue-700 border-blue-200';
+    return 'bg-gray-50 text-gray-600 border-gray-200';
+  };
+
+  const formatDate = (date) => {
+    if (!date) return 'N/A';
+    try {
+      const d = new Date(date);
+      return d.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    } catch {
+      return date;
+    }
+  };
+
+  const getNextHearing = (c) => {
+    return c.nextHearingDate || c.nextDate || c.courtDetails?.nextDate || 'N/A';
+  };
+
+  const getDepartment = (c) => {
+    return c.department || c.caseType || c.nameOfCourt || 'N/A';
+  };
+
+  const getCaseTitle = (c) => {
+    if (c.plaintiff && c.defendant) {
+      return `${c.plaintiff} vs ${c.defendant}`;
+    }
+    return c.caseTitle || c.title || 'Untitled Case';
+  };
+
+  const getCaseNumber = (c) => {
+    return c.caseNumber || c.id?.slice(0, 8) || 'N/A';
+  };
 
   // ============================================
   // NAVIGATION
@@ -327,12 +514,346 @@ const Dashboard = () => {
     return result;
   };
 
-  window.__editCase = (caseItem) => {
-    console.log('🌐 Global edit called for case:', caseItem);
-    setCaseToEdit(caseItem);
-    setIsEditModalOpen(true);
+  // ============================================
+  // PROCEEDINGS HANDLERS
+  // ============================================
+  const handleAddProceeding = async (newProceeding) => {
+    console.log('📝 Dashboard - handleAddProceeding called with:', newProceeding);
+    
+    if (!newProceeding.caseId) {
+      console.error('❌ Case ID is required');
+      toast.error('Please select a case');
+      return { success: false, error: 'Case ID is required' };
+    }
+    
+    try {
+      const result = await addProceeding(newProceeding);
+      console.log('📝 Result from addProceeding:', result);
+      
+      if (result && result.success) {
+        await fetchProceedings();
+        setModalKey(prev => prev + 1);
+        toast.success('Proceeding added successfully!');
+        return result;
+      } else {
+        toast.error(result?.error || 'Failed to add proceeding');
+        return result;
+      }
+    } catch (error) {
+      console.error('❌ Error adding proceeding:', error);
+      toast.error(error.message || 'Failed to add proceeding');
+      return { success: false, error: error.message };
+    }
   };
 
+  const handleUpdateProceeding = async (id, updatedData) => {
+    console.log('📝 Dashboard - handleUpdateProceeding called with:', id, updatedData);
+    try {
+      const result = await updateProceeding(id, updatedData);
+      if (result && result.success) {
+        await fetchProceedings();
+        setModalKey(prev => prev + 1);
+        toast.success('Proceeding updated successfully!');
+        return result;
+      } else {
+        toast.error(result?.error || 'Failed to update proceeding');
+        return result;
+      }
+    } catch (error) {
+      console.error('❌ Error updating proceeding:', error);
+      toast.error(error.message || 'Failed to update proceeding');
+      return { success: false, error: error.message };
+    }
+  };
+
+  const handleDeleteProceeding = async (id) => {
+    console.log('🗑️ Dashboard - handleDeleteProceeding called with:', id);
+    try {
+      const result = await deleteProceeding(id);
+      if (result && result.success) {
+        await fetchProceedings();
+        setModalKey(prev => prev + 1);
+        toast.success('Proceeding deleted successfully!');
+        return result;
+      } else {
+        toast.error(result?.error || 'Failed to delete proceeding');
+        return result;
+      }
+    } catch (error) {
+      console.error('❌ Error deleting proceeding:', error);
+      toast.error(error.message || 'Failed to delete proceeding');
+      return { success: false, error: error.message };
+    }
+  };
+
+  // ============================================
+  // COMMENT HANDLERS
+  // ============================================
+  const handleAddComment = async (newComment) => {
+    console.log('📝 Dashboard - handleAddComment called with:', newComment);
+    
+    if (!newComment.caseId) {
+      console.error('❌ Case ID is required');
+      toast.error('Please select a case');
+      return { success: false, error: 'Case ID is required' };
+    }
+    
+    try {
+      const result = await addComment(newComment);
+      console.log('📝 Result from addComment:', result);
+      
+      if (result && result.success) {
+        await fetchComments();
+        setModalKey(prev => prev + 1);
+        toast.success('Comment added successfully!');
+        return result;
+      } else {
+        toast.error(result?.error || 'Failed to add comment');
+        return result;
+      }
+    } catch (error) {
+      console.error('❌ Error adding comment:', error);
+      toast.error(error.message || 'Failed to add comment');
+      return { success: false, error: error.message };
+    }
+  };
+
+  const handleUpdateComment = async (id, updatedData) => {
+    console.log('📝 Dashboard - handleUpdateComment called with:', id, updatedData);
+    try {
+      const result = await updateComment(id, updatedData);
+      if (result && result.success) {
+        await fetchComments();
+        setModalKey(prev => prev + 1);
+        toast.success('Comment updated successfully!');
+        return result;
+      } else {
+        toast.error(result?.error || 'Failed to update comment');
+        return result;
+      }
+    } catch (error) {
+      console.error('❌ Error updating comment:', error);
+      toast.error(error.message || 'Failed to update comment');
+      return { success: false, error: error.message };
+    }
+  };
+
+  const handleDeleteComment = async (id) => {
+    console.log('🗑️ Dashboard - handleDeleteComment called with:', id);
+    try {
+      const result = await deleteComment(id);
+      if (result && result.success) {
+        await fetchComments();
+        setModalKey(prev => prev + 1);
+        toast.success('Comment deleted successfully!');
+        return result;
+      } else {
+        toast.error(result?.error || 'Failed to delete comment');
+        return result;
+      }
+    } catch (error) {
+      console.error('❌ Error deleting comment:', error);
+      toast.error(error.message || 'Failed to delete comment');
+      return { success: false, error: error.message };
+    }
+  };
+
+  // ============================================
+  // PARTY HANDLERS
+  // ============================================
+  const handleAddParty = async (newParty) => {
+    console.log('📝 Dashboard - handleAddParty called with:', newParty);
+    
+    if (!newParty.caseId) {
+      console.error('❌ Case ID is required');
+      toast.error('Please select a case');
+      return { success: false, error: 'Case ID is required' };
+    }
+    
+    try {
+      const result = await addParty(newParty);
+      console.log('📝 Result from addParty:', result);
+      
+      if (result && result.success) {
+        await fetchParties();
+        setModalKey(prev => prev + 1);
+        toast.success('Party added successfully!');
+        return result;
+      } else {
+        toast.error(result?.error || 'Failed to add party');
+        return result;
+      }
+    } catch (error) {
+      console.error('❌ Error adding party:', error);
+      toast.error(error.message || 'Failed to add party');
+      return { success: false, error: error.message };
+    }
+  };
+
+  const handleUpdateParty = async (id, updatedData) => {
+    console.log('📝 Dashboard - handleUpdateParty called with:', id, updatedData);
+    try {
+      const result = await updateParty(id, updatedData);
+      if (result && result.success) {
+        await fetchParties();
+        setModalKey(prev => prev + 1);
+        toast.success('Party updated successfully!');
+        return result;
+      } else {
+        toast.error(result?.error || 'Failed to update party');
+        return result;
+      }
+    } catch (error) {
+      console.error('❌ Error updating party:', error);
+      toast.error(error.message || 'Failed to update party');
+      return { success: false, error: error.message };
+    }
+  };
+
+  const handleDeleteParty = async (id) => {
+    console.log('🗑️ Dashboard - handleDeleteParty called with:', id);
+    try {
+      const result = await deleteParty(id);
+      if (result && result.success) {
+        await fetchParties();
+        setModalKey(prev => prev + 1);
+        toast.success('Party deleted successfully!');
+        return result;
+      } else {
+        toast.error(result?.error || 'Failed to delete party');
+        return result;
+      }
+    } catch (error) {
+      console.error('❌ Error deleting party:', error);
+      toast.error(error.message || 'Failed to delete party');
+      return { success: false, error: error.message };
+    }
+  };
+
+  // ============================================
+  // REFRESH HANDLER
+  // ============================================
+  const handleRefresh = async () => {
+    console.log('🔄 Refreshing data from Dashboard');
+    await Promise.all([
+      fetchCases({ limit: 10 }),
+      fetchProceedings(),
+      fetchReferences(),
+      fetchComments(),
+      fetchParties(),
+    ]);
+    console.log('✅ All data refreshed');
+    setModalKey(prev => prev + 1);
+  };
+
+  // ============================================
+  // REGISTER GLOBAL HELPERS
+  // ============================================
+  // ============================================
+// ✅ STORE DATA GLOBALLY (ADD THIS NEW BLOCK)
+// ============================================
+useEffect(() => {
+  if (proceedings.length > 0) {
+    window.__allProceedings = proceedings;
+    console.log('✅ Updated global allProceedings:', proceedings.length);
+  }
+}, [proceedings]);
+
+useEffect(() => {
+  if (comments.length > 0) {
+    window.__allComments = comments;
+    console.log('✅ Updated global allComments:', comments.length);
+  }
+}, [comments]);
+
+useEffect(() => {
+  if (parties.length > 0) {
+    window.__allParties = parties;
+    console.log('✅ Updated global allParties:', parties.length);
+  }
+}, [parties]);
+
+useEffect(() => {
+  if (cases.length > 0) {
+    window.__cases = cases;
+    console.log('✅ Updated global cases:', cases.length);
+  }
+}, [cases]);
+
+// ============================================
+// REGISTER GLOBAL HELPERS (REPLACE THIS)
+// ============================================
+useEffect(() => {
+  if (typeof window !== 'undefined') {
+    // Register functions
+    window.__handleRefresh = handleRefresh;
+    window.__handleAddProceeding = handleAddProceeding;
+    window.__handleAddComment = handleAddComment;
+    window.__handleAddParty = handleAddParty;
+    window.__handleFetchProceedings = fetchProceedings;
+    window.__handleFetchComments = fetchComments;      // ✅ ADDED
+    window.__handleFetchParties = fetchParties;        // ✅ ADDED
+    window.__handleRefreshSelectedCase = handleRefresh;
+    window.__handleFetchCaseById = fetchCases;
+    window.__handleView = (caseItem) => {
+      console.log('👁️ Global handleView called for case:', caseItem?._id || caseItem?.id);
+      setSelectedCase(caseItem);
+    };
+    
+    // Store data globally
+    window.__proceedings = proceedings;
+    window.__comments = comments;                      // ✅ ADDED
+    window.__parties = parties;                        // ✅ ADDED
+    window.__cases = cases;                            // ✅ ADDED
+    window.__allProceedings = proceedings;            // ✅ ADDED
+    window.__allComments = comments;                  // ✅ ADDED
+    window.__allParties = parties;                    // ✅ ADDED
+    window.__selectedCase = selectedCase;              // ✅ ADDED
+    
+    console.log('✅ Global helpers registered:');
+    console.log('  - __allProceedings:', window.__allProceedings?.length || 0);
+    console.log('  - __allComments:', window.__allComments?.length || 0);
+    console.log('  - __allParties:', window.__allParties?.length || 0);
+    console.log('  - __cases:', window.__cases?.length || 0);
+  }
+  
+  return () => {
+    if (typeof window !== 'undefined') {
+      delete window.__handleRefresh;
+      delete window.__handleAddProceeding;
+      delete window.__handleAddComment;
+      delete window.__handleAddParty;
+      delete window.__handleFetchProceedings;
+      delete window.__handleFetchComments;
+      delete window.__handleFetchParties;
+      delete window.__handleRefreshSelectedCase;
+      delete window.__handleFetchCaseById;
+      delete window.__handleView;
+      delete window.__proceedings;
+      delete window.__comments;
+      delete window.__parties;
+      delete window.__cases;
+      delete window.__allProceedings;
+      delete window.__allComments;
+      delete window.__allParties;
+      delete window.__selectedCase;
+    }
+  };
+}, [
+  handleRefresh, 
+  handleAddProceeding, 
+  handleAddComment, 
+  handleAddParty, 
+  fetchProceedings, 
+  fetchComments, 
+  fetchParties, 
+  fetchCases, 
+  proceedings, 
+  comments, 
+  parties, 
+  cases,
+  selectedCase
+]);
   // ============================================
   // RENDER REFERENCE CASES
   // ============================================
@@ -492,19 +1013,19 @@ const Dashboard = () => {
     if (isInitialLoad || casesLoading) {
       return (
         <div className="space-y-6">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
-            {[...Array(7)].map((_, i) => (
-              <div key={i} className="bg-[#1a1a2e]/50 rounded-xl border border-[rgba(255,255,255,0.05)] p-4 animate-pulse">
-                <div className="h-4 bg-gray-700/50 rounded w-1/2 mb-2"></div>
-                <div className="h-8 bg-gray-700/50 rounded w-3/4"></div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-white rounded-xl border border-[#BBE1FA]/40 p-4 animate-pulse">
+                <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
+                <div className="h-8 bg-gray-200 rounded w-3/4"></div>
               </div>
             ))}
           </div>
-          <div className="bg-[#1a1a2e]/50 rounded-xl border border-[rgba(255,255,255,0.05)] p-6">
-            <div className="h-6 bg-gray-700/50 rounded w-1/4 mb-4"></div>
+          <div className="bg-white rounded-xl border border-[#BBE1FA]/40 p-6 animate-pulse">
+            <div className="h-6 bg-gray-200 rounded w-1/4 mb-4"></div>
             <div className="space-y-3">
               {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-16 bg-gray-700/30 rounded"></div>
+                <div key={i} className="h-16 bg-gray-100 rounded"></div>
               ))}
             </div>
           </div>
@@ -513,29 +1034,9 @@ const Dashboard = () => {
     }
 
     return (
-      <div className="space-y-8">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-[#1B262C]">
-              Welcome back, {user?.name || 'User'}! 👋
-            </h1>
-            <p className="text-[#6B7280] mt-1">
-              Here's what's happening with your cases today.
-            </p>
-          </div>
-          <div className="mt-4 sm:mt-0 flex items-center gap-3">
-            <span className="text-sm text-[#6B7280]">
-              {new Date().toLocaleDateString('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })}
-            </span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
+      <div className="space-y-6">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {statsCards.map((stat, index) => (
             <div
               key={index}
@@ -556,99 +1057,359 @@ const Dashboard = () => {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="bg-white rounded-xl border border-[#BBE1FA] p-4 hover:shadow-premium transition-all duration-300 flex items-center gap-4"
-          >
-            <div className="w-12 h-12 rounded-xl bg-[#3282B8]/10 flex items-center justify-center">
-              <FaPlusCircle className="text-[#3282B8] text-xl" />
-            </div>
-            <div className="text-left">
-              <h3 className="font-semibold text-[#1B262C]">New Case</h3>
-              <p className="text-xs text-[#6B7280]">Add a new case</p>
-            </div>
-          </button>
-          <button
-            onClick={() => handleNavigate('clients')}
-            className="bg-white rounded-xl border border-[#BBE1FA] p-4 hover:shadow-premium transition-all duration-300 flex items-center gap-4"
-          >
-            <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center">
-              <FaUsers className="text-purple-500 text-xl" />
-            </div>
-            <div className="text-left">
-              <h3 className="font-semibold text-[#1B262C]">Manage Clients</h3>
-              <p className="text-xs text-[#6B7280]">View all clients</p>
-            </div>
-          </button>
-          <button
-            onClick={() => handleNavigate('calendar')}
-            className="bg-white rounded-xl border border-[#BBE1FA] p-4 hover:shadow-premium transition-all duration-300 flex items-center gap-4"
-          >
-            <div className="w-12 h-12 rounded-xl bg-rose-500/10 flex items-center justify-center">
-              <FaCalendarAlt className="text-rose-500 text-xl" />
-            </div>
-            <div className="text-left">
-              <h3 className="font-semibold text-[#1B262C]">Calendar</h3>
-              <p className="text-xs text-[#6B7280]">View upcoming events</p>
-            </div>
-          </button>
-          <button
-            onClick={() => handleNavigate('reference-cases')}
-            className="bg-white rounded-xl border border-[#BBE1FA] p-4 hover:shadow-premium transition-all duration-300 flex items-center gap-4"
-          >
-            <div className="w-12 h-12 rounded-xl bg-[#8B5CF6]/10 flex items-center justify-center">
-              <FaBook className="text-[#8B5CF6] text-xl" />
-            </div>
-            <div className="text-left">
-              <h3 className="font-semibold text-[#1B262C]">References</h3>
-              <p className="text-xs text-[#6B7280]">View reference cases</p>
-            </div>
-          </button>
-        </div>
-
-        <div className="bg-white rounded-xl border border-[#BBE1FA] p-6 shadow-premium">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-[#1B262C]">Recent Cases</h2>
-            <button
-              onClick={() => handleNavigate('cases')}
-              className="text-sm text-[#0F4C75] hover:text-[#3282B8] transition-colors"
-            >
-              View All →
-            </button>
+        {/* ===== CASES TABLE ===== */}
+        <div className="bg-white rounded-2xl border border-[#BBE1FA]/40 shadow-sm overflow-hidden">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-[#1B262C] to-[#0F4C75] px-6 py-4">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <FaFileAlt className="text-[#3282B8]" />
+              Civil Cases
+            </h2>
+            <p className="text-white/60 text-sm">
+              {new Date().toLocaleDateString('en-US', { 
+                day: '2-digit', 
+                month: '2-digit', 
+                year: 'numeric' 
+              })}
+            </p>
           </div>
-          {cases.slice(0, 5).length > 0 ? (
-            <div className="space-y-3">
-              {cases.slice(0, 5).map((caseItem) => (
-                <div
-                  key={caseItem.id || caseItem._id}
-                  className="flex items-center justify-between p-3 bg-[#F0F4F8] rounded-lg hover:bg-[#D4AF37]/5 transition-colors cursor-pointer"
-                  onClick={() => setSelectedCase(caseItem)}
+
+          {/* Search & Tabs */}
+          <div className="px-6 pt-4 pb-2 bg-[#F8FAFC] border-b border-[#BBE1FA]/30">
+            {/* Search */}
+            <div className="relative mb-3">
+              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9CA3AF] text-sm" />
+              <input
+                type="text"
+                placeholder="Search cases by number, title, party..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-white border border-[#BBE1FA] rounded-xl text-sm text-[#1B262C] placeholder:text-[#9CA3AF] focus:outline-none focus:ring-2 focus:ring-[#3282B8] focus:border-transparent transition-all duration-200"
+              />
+            </div>
+
+            {/* Tabs */}
+            <div className="flex flex-wrap items-center gap-2">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setCurrentPage(1);
+                  }}
+                  className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all duration-200 ${
+                    activeTab === tab.id
+                      ? 'bg-gradient-to-r from-[#0F4C75] to-[#3282B8] text-white shadow-md shadow-[#0F4C75]/25'
+                      : 'text-[#6B7280] bg-white hover:bg-gray-50 border border-[#BBE1FA]/40'
+                  }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 rounded-full bg-[#3282B8]"></div>
-                    <div>
-                      <p className="text-sm font-medium text-[#1B262C]">
-                        {caseItem.caseTitle || caseItem.title || 'Untitled'}
-                      </p>
-                      <p className="text-xs text-[#6B7280]">
-                        {caseItem.caseNumber || 'No number'} • {caseItem.status || 'active'}
-                      </p>
-                    </div>
-                  </div>
-                  <span className={`text-xs px-2 py-1 rounded-full ${
-                    caseItem.status === 'active' ? 'bg-emerald-500/10 text-emerald-600' :
-                    caseItem.status === 'pending' ? 'bg-amber-500/10 text-amber-600' :
-                    'bg-gray-500/10 text-gray-600'
-                  }`}>
-                    {caseItem.status || 'active'}
-                  </span>
-                </div>
+                  {tab.label} <span className="ml-1 text-xs opacity-70">{tab.count}</span>
+                </button>
               ))}
             </div>
-          ) : (
-            <div className="text-center py-8 text-[#6B7280]">
-              <p>No cases yet. Create your first case!</p>
+          </div>
+
+          {/* Filters */}
+          <div className="px-6 py-3 bg-white border-b border-[#BBE1FA]/30 flex flex-wrap items-center gap-3">
+            {/* Department */}
+            <div className="relative">
+              <button
+                onClick={() => setShowDepartmentDropdown(!showDepartmentDropdown)}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-[#BBE1FA] rounded-lg text-sm text-[#1B262C] hover:border-[#3282B8] transition-all duration-200"
+              >
+                <FaFilter className="text-[#9CA3AF] text-xs" />
+                <span className="truncate max-w-[120px]">
+                  {selectedDepartment || 'Department'}
+                </span>
+                <FaChevronDown className={`text-[#9CA3AF] text-xs transition-transform duration-200 ${showDepartmentDropdown ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {showDepartmentDropdown && (
+                <div className="absolute z-10 top-full left-0 mt-1 w-64 max-h-60 overflow-y-auto bg-white border border-[#BBE1FA] rounded-xl shadow-lg">
+                  <div 
+                    className="px-4 py-2 hover:bg-[#F0F4F8] cursor-pointer text-sm text-[#1B262C] border-b border-[#BBE1FA]/30"
+                    onClick={() => {
+                      setSelectedDepartment('');
+                      setShowDepartmentDropdown(false);
+                    }}
+                  >
+                    All Departments
+                  </div>
+                  {departments.map((dept) => (
+                    <div 
+                      key={dept}
+                      className="px-4 py-2 hover:bg-[#F0F4F8] cursor-pointer text-sm text-[#1B262C] border-b border-[#BBE1FA]/30 last:border-0"
+                      onClick={() => {
+                        setSelectedDepartment(dept);
+                        setShowDepartmentDropdown(false);
+                      }}
+                    >
+                      {dept}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Month */}
+            <div className="relative">
+              <button
+                onClick={() => setShowMonthDropdown(!showMonthDropdown)}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-[#BBE1FA] rounded-lg text-sm text-[#1B262C] hover:border-[#3282B8] transition-all duration-200"
+              >
+                <FaCalendarAlt className="text-[#9CA3AF] text-xs" />
+                <span className="truncate max-w-[100px]">
+                  {selectedMonth || 'Month'}
+                </span>
+                <FaChevronDown className={`text-[#9CA3AF] text-xs transition-transform duration-200 ${showMonthDropdown ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {showMonthDropdown && (
+                <div className="absolute z-10 top-full left-0 mt-1 w-40 max-h-48 overflow-y-auto bg-white border border-[#BBE1FA] rounded-xl shadow-lg">
+                  <div 
+                    className="px-4 py-2 hover:bg-[#F0F4F8] cursor-pointer text-sm text-[#1B262C] border-b border-[#BBE1FA]/30"
+                    onClick={() => {
+                      setSelectedMonth('');
+                      setShowMonthDropdown(false);
+                    }}
+                  >
+                    All Months
+                  </div>
+                  {months.map((month) => (
+                    <div 
+                      key={month}
+                      className="px-4 py-2 hover:bg-[#F0F4F8] cursor-pointer text-sm text-[#1B262C] border-b border-[#BBE1FA]/30 last:border-0"
+                      onClick={() => {
+                        setSelectedMonth(month);
+                        setShowMonthDropdown(false);
+                      }}
+                    >
+                      {month}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Year */}
+            <div className="relative">
+              <button
+                onClick={() => setShowYearDropdown(!showYearDropdown)}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-[#BBE1FA] rounded-lg text-sm text-[#1B262C] hover:border-[#3282B8] transition-all duration-200"
+              >
+                <span className="truncate max-w-[80px]">
+                  {selectedYear || 'Year'}
+                </span>
+                <FaChevronDown className={`text-[#9CA3AF] text-xs transition-transform duration-200 ${showYearDropdown ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {showYearDropdown && (
+                <div className="absolute z-10 top-full left-0 mt-1 w-28 max-h-48 overflow-y-auto bg-white border border-[#BBE1FA] rounded-xl shadow-lg">
+                  <div 
+                    className="px-4 py-2 hover:bg-[#F0F4F8] cursor-pointer text-sm text-[#1B262C] border-b border-[#BBE1FA]/30"
+                    onClick={() => {
+                      setSelectedYear('');
+                      setShowYearDropdown(false);
+                    }}
+                  >
+                    All Years
+                  </div>
+                  {years.map((year) => (
+                    <div 
+                      key={year}
+                      className="px-4 py-2 hover:bg-[#F0F4F8] cursor-pointer text-sm text-[#1B262C] border-b border-[#BBE1FA]/30 last:border-0"
+                      onClick={() => {
+                        setSelectedYear(year);
+                        setShowYearDropdown(false);
+                      }}
+                    >
+                      {year}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Clear Filters */}
+            {(searchQuery || selectedDepartment || selectedMonth || selectedYear || activeTab !== 'all') && (
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedDepartment('');
+                  setSelectedMonth('');
+                  setSelectedYear('');
+                  setActiveTab('all');
+                }}
+                className="px-3 py-2 text-sm font-medium text-[#0F4C75] hover:bg-[#3282B8]/10 rounded-lg transition-all duration-200 whitespace-nowrap"
+              >
+                Clear Filters
+              </button>
+            )}
+          </div>
+
+          {/* Table Controls */}
+          <div className="px-6 py-3 bg-white border-b border-[#BBE1FA]/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-[#6B7280]">Show</span>
+              <select
+                value={entriesPerPage}
+                onChange={(e) => {
+                  setEntriesPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="px-3 py-1.5 border border-[#BBE1FA] rounded-lg text-sm text-[#1B262C] focus:outline-none focus:ring-2 focus:ring-[#3282B8] bg-white"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span className="text-sm text-[#6B7280]">entries</span>
+            </div>
+            <div className="text-sm text-[#6B7280]">
+              Showing {filteredCases.length > 0 ? startIndex + 1 : 0} to {Math.min(endIndex, filteredCases.length)} of {filteredCases.length} entries
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="overflow-x-auto">
+            {casesLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="w-8 h-8 border-4 border-[#3282B8] border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-[#0F4C75] border-b border-[#BBE1FA]/40">
+                    <th className="px-4 py-3 text-center text-[10px] font-semibold text-white uppercase tracking-wider">#</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-semibold text-white uppercase tracking-wider">Case #</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-semibold text-white uppercase tracking-wider">Case Title</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-semibold text-white uppercase tracking-wider">Department</th>
+                    <th className="px-4 py-3 text-center text-[10px] font-semibold text-white uppercase tracking-wider">Next Hearing</th>
+                    <th className="px-4 py-3 text-center text-[10px] font-semibold text-white uppercase tracking-wider">Status</th>
+                    <th className="px-4 py-3 text-center text-[10px] font-semibold text-white uppercase tracking-wider">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentCases.length > 0 ? (
+                    currentCases.map((c, index) => (
+                      <tr 
+                        key={c.id || c._id || index} 
+                        className="border-b border-[#BBE1FA]/20 hover:bg-[#F0F4F8] transition-all cursor-pointer"
+                        onClick={() => setSelectedCase(c)}
+                      >
+                        <td className="px-4 py-3 text-center text-sm text-[#6B7280]">
+                          {startIndex + index + 1}
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium text-[#0F4C75]">
+                          #{getCaseNumber(c)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-[#1B262C]">
+                          {getCaseTitle(c)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-[#6B7280] max-w-[200px] truncate">
+                          {getDepartment(c)}
+                        </td>
+                        <td className="px-4 py-3 text-center text-sm text-[#1B262C] font-medium">
+                          {formatDate(getNextHearing(c))}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`px-3 py-1 rounded-full text-[10px] font-medium border ${getStatusBadge(c.status)}`}>
+                            {c.status || 'Pending'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-center gap-2">
+                            <button 
+                              className="p-1.5 text-[#3282B8] hover:bg-[#3282B8]/10 rounded-lg transition-all"
+                              title="View Case"
+                              onClick={() => setSelectedCase(c)}
+                            >
+                              <FaEye className="text-sm" />
+                            </button>
+                            <button 
+                              className="p-1.5 text-[#F59E0B] hover:bg-[#F59E0B]/10 rounded-lg transition-all"
+                              title="Edit Case"
+                              onClick={() => handleEdit(c)}
+                            >
+                              <FaEdit className="text-sm" />
+                            </button>
+                            <button 
+                              className="p-1.5 text-[#EF4444] hover:bg-[#EF4444]/10 rounded-lg transition-all"
+                              title="Delete Case"
+                              onClick={() => {
+                                if (window.confirm('Are you sure you want to delete this case?')) {
+                                  deleteCase(c.id || c._id);
+                                }
+                              }}
+                            >
+                              <FaTrash className="text-sm" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="7" className="px-4 py-12 text-center text-[#6B7280]">
+                        <div className="text-4xl mb-2">🔍</div>
+                        <p className="text-sm">No cases found</p>
+                        <p className="text-xs mt-1">Try adjusting your filters</p>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Pagination */}
+          {filteredCases.length > 0 && (
+            <div className="px-6 py-3 bg-[#F8FAFC] border-t border-[#BBE1FA]/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="text-sm text-[#6B7280]">
+                Showing {startIndex + 1} to {Math.min(endIndex, filteredCases.length)} of {filteredCases.length} entries
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 text-sm text-[#6B7280] border border-[#BBE1FA] rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  <FaChevronLeft className="text-xs" />
+                </button>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`px-3 py-1.5 text-sm rounded-lg transition-all ${
+                        currentPage === pageNum
+                          ? 'bg-[#0F4C75] text-white'
+                          : 'text-[#6B7280] hover:bg-white border border-transparent hover:border-[#BBE1FA]'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1.5 text-sm text-[#6B7280] border border-[#BBE1FA] rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  <FaChevronRight className="text-xs" />
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -870,7 +1631,7 @@ const Dashboard = () => {
   // ============================================
   // LOADING STATE
   // ============================================
-  if (isInitialLoad || casesLoading || clientsLoading || eventsLoading || referencesLoading) {
+  if (isInitialLoad || casesLoading || clientsLoading || eventsLoading || referencesLoading || proceedingsLoading || commentsLoading || partiesLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F0F4F8]">
         <div className="text-center">
@@ -927,13 +1688,45 @@ const Dashboard = () => {
         onUpdate={handleUpdateCase}
       />
 
-      <CaseDetailModal
-        isOpen={!!selectedCase}
-        case={selectedCase}
-        onClose={() => setSelectedCase(null)}
-        onStatusChange={updateCaseStatus}
-        onEdit={handleEdit}
-      />
+      {/* ===== FIXED: CaseDetailModal - Only render when case exists ===== */}
+      {console.log('🔴🔴🔴 BEFORE MODAL - proceedings length:', proceedings.length)}
+      {console.log('🔴🔴🔴 BEFORE MODAL - selectedCase:', selectedCase)}
+
+      {selectedCase && (
+        <CaseDetailModal
+          key={modalKey}
+          isOpen={!!selectedCase}
+          case={selectedCase}
+          onClose={() => {
+            console.log('🔴 Closing case detail modal');
+            setSelectedCase(null);
+          }}
+          onStatusChange={updateCaseStatus}
+          onEdit={(caseItem) => {
+            handleEdit(caseItem);
+          }}
+          onDelete={deleteCase}
+          onDeleteComplete={() => {
+            setSelectedCase(null);
+          }}
+          onRefresh={handleRefresh}
+          // ===== PROCEEDINGS PROPS =====
+          proceedings={proceedings}
+          onAddProceeding={handleAddProceeding}
+          onUpdateProceeding={handleUpdateProceeding}
+          onDeleteProceeding={handleDeleteProceeding}
+          // ===== COMMENTS PROPS =====
+          comments={comments}
+          onAddComment={handleAddComment}
+          onUpdateComment={handleUpdateComment}
+          onDeleteComment={handleDeleteComment}
+          // ===== PARTIES PROPS =====
+          parties={parties}
+          onAddParty={handleAddParty}
+          onUpdateParty={handleUpdateParty}
+          onDeleteParty={handleDeleteParty}
+        />
+      )}
 
       <AddReferenceModal
         isOpen={isAddReferenceModalOpen}

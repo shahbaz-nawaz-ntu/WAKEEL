@@ -1,7 +1,9 @@
 // src/hooks/useClients.js
 import { useState, useCallback, useEffect } from 'react';
 
-const API_URL = 'https://2a95-2400-adc7-2918-d000-8cfe-551d-492d-ed50.ngrok-free.app/api';
+// ✅ FIX: Use relative URL for development with proxy
+// The proxy will forward /api to http://localhost:5000/api
+const API_URL = '/api';
 
 export const useClients = () => {
   const [clients, setClients] = useState([]);
@@ -10,19 +12,23 @@ export const useClients = () => {
 
   const getAuthHeader = () => {
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-    return {
-      headers: {
-        'Authorization': token ? `Bearer ${token}` : '',
-        'Content-Type': 'application/json',
-      },
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
     };
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    return { headers };
   };
 
   const fetchClients = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      console.log('👥 Fetching clients...');
+      console.log('👥 Fetching clients from:', `${API_URL}/clients`);
       const response = await fetch(`${API_URL}/clients`, {
         method: 'GET',
         ...getAuthHeader(),

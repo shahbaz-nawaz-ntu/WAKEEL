@@ -30,7 +30,37 @@ export const getCases = async (req, res) => {
       .populate('clientId', 'name email')
       .sort({ createdAt: -1 });
     
-    res.json({ success: true, count: cases.length, data: cases });
+    // ✅ Format cases to ensure all fields are present
+    const formattedCases = cases.map(c => {
+      const obj = c.toJSON ? c.toJSON() : { ...c };
+      return {
+        ...obj,
+        id: obj._id?.toString() || obj.id,
+        // ✅ Fields from AddCaseModal
+        nameOfCourt: obj.nameOfCourt || '',
+        natureOfCase: obj.natureOfCase || '',
+        nextDateOfHearing: obj.nextDateOfHearing || '',
+        copyOfSummon: obj.copyOfSummon || '',
+        copyOfPlaint: obj.copyOfPlaint || '',
+        relevantDepartmentalRecord: obj.relevantDepartmentalRecord || '',
+        lawOfficer: obj.lawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
+        alternateLawOfficer: obj.alternateLawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
+        writtenStatements: obj.writtenStatements || [],
+        caseTitle: obj.caseTitle || obj.title || '',
+        title: obj.title || obj.caseTitle || '',
+        plaintiff: obj.plaintiff || '',
+        defendant: obj.defendant || '',
+        division: obj.division || '',
+        district: obj.district || '',
+        caseNumber: obj.caseNumber || '',
+        status: obj.status || 'active',
+        courtDetails: obj.courtDetails || {},
+        caseNature: obj.caseNature || {},
+        attachments: obj.attachments || {},
+      };
+    });
+    
+    res.json({ success: true, count: formattedCases.length, data: formattedCases });
   } catch (error) {
     logger.error(`Get cases error: ${error}`);
     res.status(500).json({ success: false, error: error.message });
@@ -54,14 +84,30 @@ export const getCase = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Case not found' });
     }
     
-    res.json({ success: true, data: caseItem });
+    const obj = caseItem.toJSON ? caseItem.toJSON() : { ...caseItem };
+    const formattedCase = {
+      ...obj,
+      id: obj._id?.toString() || obj.id,
+      // ✅ Fields from AddCaseModal
+      nameOfCourt: obj.nameOfCourt || '',
+      natureOfCase: obj.natureOfCase || '',
+      nextDateOfHearing: obj.nextDateOfHearing || '',
+      copyOfSummon: obj.copyOfSummon || '',
+      copyOfPlaint: obj.copyOfPlaint || '',
+      relevantDepartmentalRecord: obj.relevantDepartmentalRecord || '',
+      lawOfficer: obj.lawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
+      alternateLawOfficer: obj.alternateLawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
+      writtenStatements: obj.writtenStatements || [],
+    };
+    
+    res.json({ success: true, data: formattedCase });
   } catch (error) {
     logger.error(`Get case error: ${error}`);
     res.status(500).json({ success: false, error: error.message });
   }
 };
 
-// @desc    Create a case - DEBUG VERSION
+// @desc    Create a case - FIXED
 // @route   POST /api/cases
 // @access  Private
 export const createCase = async (req, res) => {
@@ -69,44 +115,114 @@ export const createCase = async (req, res) => {
     console.log('📥 ========== CREATE CASE ==========');
     console.log('📥 Received body:', JSON.stringify(req.body, null, 2));
     console.log('📥 User ID:', req.user.id);
-    console.log('📥 User email:', req.user.email);
 
-    // Simplified case data - only required fields
+    // ✅ Get all fields from request body
     const caseData = {
-      caseTitle: req.body.caseTitle || req.body.title || 'Untitled Case',
+      // ✅ Required fields
       createdBy: req.user.id,
+      
+      // ✅ Case fields
+      caseTitle: req.body.caseTitle || req.body.title || 'Untitled Case',
+      title: req.body.title || req.body.caseTitle || 'Untitled Case',
+      caseNumber: req.body.caseNumber || '',
+      division: req.body.division || '',
+      district: req.body.district || '',
+      plaintiff: req.body.plaintiff || '',
+      defendant: req.body.defendant || '',
+      status: req.body.status || 'active',
+      caseType: req.body.caseType || 'Civil',
+      priority: req.body.priority || 'Medium',
+      
+      // ✅ Court fields
+      nameOfCourt: req.body.nameOfCourt || '',
+      courtName: req.body.courtName || req.body.nameOfCourt || '',
+      courtDetails: req.body.courtDetails || {},
+      
+      // ✅ Case nature
+      natureOfCase: req.body.natureOfCase || '',
+      caseNature: req.body.caseNature || {},
+      
+      // ✅ Dates
+      nextDateOfHearing: req.body.nextDateOfHearing || '',
+      nextDate: req.body.nextDate || req.body.nextDateOfHearing || '',
+      nexthearing: req.body.nexthearing || req.body.nextDateOfHearing || '',
+      
+      // ✅ Attachments
+      copyOfSummon: req.body.copyOfSummon || '',
+      copyOfPlaint: req.body.copyOfPlaint || '',
+      relevantDepartmentalRecord: req.body.relevantDepartmentalRecord || '',
+      attachments: req.body.attachments || {},
+      
+      // ✅ Law Officers
+      lawOfficer: req.body.lawOfficer || { 
+        type: 'Department Representative', 
+        name: '', 
+        designation: '', 
+        officeAddress: '', 
+        officialNumber: '', 
+        cellNumber: '' 
+      },
+      alternateLawOfficer: req.body.alternateLawOfficer || { 
+        type: 'Department Representative', 
+        name: '', 
+        designation: '', 
+        officeAddress: '', 
+        officialNumber: '', 
+        cellNumber: '' 
+      },
+      
+      // ✅ Written Statements
+      writtenStatements: req.body.writtenStatements || [],
+      
+      // ✅ Other fields
+      party: req.body.party || 'N/A',
+      amount: req.body.amount || 'N/A',
+      judge: req.body.judge || 'N/A',
+      assignedTo: req.body.assignedTo || 'N/A',
+      hearings: req.body.hearings || 0,
+      date: req.body.date || new Date().toISOString().split('T')[0],
+      description: req.body.description || '',
+      remarks: req.body.remarks || '',
+      courtNo: req.body.courtNo || '',
+      cmsNo: req.body.cmsNo || '',
+      officeNo: req.body.officeNo || '',
+      instituteDate: req.body.instituteDate || '',
+      instituteNo: req.body.instituteNo || '',
+      documentsCount: req.body.documentsCount || 0,
+      documents: req.body.documents || {},
     };
-
-    // Add optional fields if they exist
-    if (req.body.caseNo) caseData.caseNumber = req.body.caseNo;
-    if (req.body.description) caseData.description = req.body.description;
-    if (req.body.caseType) caseData.caseType = req.body.caseType;
-    if (req.body.priority) caseData.priority = req.body.priority;
-    if (req.body.status) caseData.status = req.body.status;
-    if (req.body.assignedTo) caseData.assignedTo = req.body.assignedTo;
-    if (req.body.judge) caseData.judge = req.body.judge;
-    if (req.body.attorneys) caseData.attorneys = req.body.attorneys;
-    if (req.body.remarks) caseData.remarks = req.body.remarks;
-    if (req.body.amount) caseData.amount = req.body.amount;
-    if (req.body.hearings !== undefined) caseData.hearings = req.body.hearings;
-    if (req.body.courtName) caseData.courtName = req.body.courtName;
 
     console.log('📦 Final case data to save:', JSON.stringify(caseData, null, 2));
 
-    // Try to create the case
     const caseItem = await Case.create(caseData);
     
     console.log('✅ Case created successfully:', caseItem._id);
     logger.info(`Case created: ${caseItem.caseNumber} by ${req.user.email}`);
     
-    res.status(201).json({ success: true, data: caseItem });
+    // ✅ Return the created case with all fields
+    const createdCase = await Case.findById(caseItem._id);
+    const obj = createdCase.toJSON ? createdCase.toJSON() : { ...createdCase };
+    const formattedCase = {
+      ...obj,
+      id: obj._id?.toString() || obj.id,
+      nameOfCourt: obj.nameOfCourt || '',
+      natureOfCase: obj.natureOfCase || '',
+      nextDateOfHearing: obj.nextDateOfHearing || '',
+      copyOfSummon: obj.copyOfSummon || '',
+      copyOfPlaint: obj.copyOfPlaint || '',
+      relevantDepartmentalRecord: obj.relevantDepartmentalRecord || '',
+      lawOfficer: obj.lawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
+      alternateLawOfficer: obj.alternateLawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
+      writtenStatements: obj.writtenStatements || [],
+    };
+    
+    res.status(201).json({ success: true, data: formattedCase });
   } catch (error) {
     console.error('❌ ========== ERROR ==========');
     console.error('❌ Error name:', error.name);
     console.error('❌ Error message:', error.message);
     console.error('❌ Error stack:', error.stack);
     
-    // Handle Mongoose validation errors
     if (error.name === 'ValidationError') {
       const errors = {};
       for (const key in error.errors) {
@@ -120,7 +236,6 @@ export const createCase = async (req, res) => {
       });
     }
     
-    // Handle duplicate key error
     if (error.code === 11000) {
       console.error('❌ Duplicate key error:', error.keyPattern);
       return res.status(400).json({
@@ -138,7 +253,7 @@ export const createCase = async (req, res) => {
   }
 };
 
-// @desc    Update a case
+// @desc    Update a case - FIXED
 // @route   PUT /api/cases/:id
 // @access  Private
 export const updateCase = async (req, res) => {
@@ -152,34 +267,51 @@ export const updateCase = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Case not found' });
     }
 
-    const updateData = {};
+    console.log('📝 Updating case:', req.params.id);
+    console.log('📝 Update data:', req.body);
+
+    // ✅ All fields that can be updated
+    const updateFields = [
+      'caseTitle', 'title', 'caseNumber', 'division', 'district',
+      'plaintiff', 'defendant', 'status', 'caseType', 'priority',
+      'nameOfCourt', 'courtName', 'courtDetails',
+      'natureOfCase', 'caseNature',
+      'nextDateOfHearing', 'nextDate', 'nexthearing',
+      'copyOfSummon', 'copyOfPlaint', 'relevantDepartmentalRecord', 'attachments',
+      'lawOfficer', 'alternateLawOfficer',
+      'writtenStatements',
+      'party', 'amount', 'judge', 'assignedTo', 'hearings', 'date',
+      'description', 'remarks', 'courtNo', 'cmsNo', 'officeNo',
+      'instituteDate', 'instituteNo', 'documentsCount', 'documents'
+    ];
     
-    const simpleFields = ['caseTitle', 'description', 'caseType', 'priority', 'status', 'assignedTo', 'courtName', 'courtNo', 'cmsNo', 'officeNo', 'judge', 'attorneys', 'remarks', 'instituteDate', 'instituteNo', 'amount', 'hearings', 'documentsCount'];
-    
-    simpleFields.forEach(field => {
-      if (req.body[field] !== undefined) {
-        updateData[field] = req.body[field];
+    updateFields.forEach(field => {
+      if (req.body[field] !== undefined && req.body[field] !== null) {
+        caseItem[field] = req.body[field];
       }
     });
 
-    if (req.body.title && !req.body.caseTitle) {
-      updateData.caseTitle = req.body.title;
-    }
-    if (req.body.caseNo && !req.body.caseNumber) {
-      updateData.caseNumber = req.body.caseNo;
-    }
+    caseItem.updatedAt = Date.now();
+    await caseItem.save();
 
-    updateData.updatedAt = Date.now();
+    const obj = caseItem.toJSON ? caseItem.toJSON() : { ...caseItem };
+    const formattedCase = {
+      ...obj,
+      id: obj._id?.toString() || obj.id,
+      nameOfCourt: obj.nameOfCourt || '',
+      natureOfCase: obj.natureOfCase || '',
+      nextDateOfHearing: obj.nextDateOfHearing || '',
+      copyOfSummon: obj.copyOfSummon || '',
+      copyOfPlaint: obj.copyOfPlaint || '',
+      relevantDepartmentalRecord: obj.relevantDepartmentalRecord || '',
+      lawOfficer: obj.lawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
+      alternateLawOfficer: obj.alternateLawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
+      writtenStatements: obj.writtenStatements || [],
+    };
 
-    const updatedCase = await Case.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    );
+    logger.info(`Case updated: ${caseItem.caseNumber}`);
     
-    logger.info(`Case updated: ${updatedCase.caseNumber}`);
-    
-    res.json({ success: true, data: updatedCase });
+    res.json({ success: true, data: formattedCase });
   } catch (error) {
     console.error('❌ Update case error:', error);
     logger.error(`Update case error: ${error}`);
@@ -234,7 +366,13 @@ export const updateCaseStatus = async (req, res) => {
     
     logger.info(`Case status updated: ${caseItem.caseNumber} -> ${status}`);
     
-    res.json({ success: true, data: caseItem });
+    const obj = caseItem.toJSON ? caseItem.toJSON() : { ...caseItem };
+    const formattedCase = {
+      ...obj,
+      id: obj._id?.toString() || obj.id,
+    };
+    
+    res.json({ success: true, data: formattedCase });
   } catch (error) {
     logger.error(`Update case status error: ${error}`);
     res.status(500).json({ success: false, error: error.message });
