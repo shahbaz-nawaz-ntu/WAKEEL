@@ -15,19 +15,41 @@ import { protect } from '../middleware/auth.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 
 const router = express.Router();
 
+// ✅ Get __dirname in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // ============================================
-// FILE UPLOAD CONFIGURATION
+// FILE UPLOAD CONFIGURATION - FIXED PATH
 // ============================================
+console.log('📁 Configuring proceeding uploads...');
+
+// ✅ Use absolute path instead of relative
+const uploadsDir = path.join(__dirname, '../uploads');
+const proceedingsDir = path.join(uploadsDir, 'proceedings');
+
+console.log(`📁 Uploads directory: ${uploadsDir}`);
+console.log(`📁 Proceedings directory: ${proceedingsDir}`);
+
+// ✅ Ensure directories exist
+if (!fs.existsSync(uploadsDir)) {
+  console.log('📁 Creating uploads directory...');
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+if (!fs.existsSync(proceedingsDir)) {
+  console.log('📁 Creating proceedings directory...');
+  fs.mkdirSync(proceedingsDir, { recursive: true });
+}
+
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    const uploadDir = 'uploads/proceedings';
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
+    // ✅ Use absolute path
+    cb(null, proceedingsDir);
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -38,7 +60,13 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+  const allowedTypes = [
+    'application/pdf', 
+    'image/jpeg', 
+    'image/png', 
+    'application/msword', 
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  ];
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
@@ -51,6 +79,8 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: fileFilter
 });
+
+console.log('✅ Proceeding uploads configured');
 
 // ============================================
 // 🧪 TEST ROUTE - MUST BE BEFORE /:id

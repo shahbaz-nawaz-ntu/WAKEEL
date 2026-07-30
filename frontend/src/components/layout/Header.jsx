@@ -1,4 +1,4 @@
-// src/components/layout/Header.jsx - Updated with Logout Modal and User Update Listener
+// src/components/layout/Header.jsx - Updated with Real-time Notifications
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   FaUserCircle, 
@@ -19,10 +19,12 @@ import {
   FaChevronDown,
   FaExternalLinkAlt,
   FaList,
-  FaFolderOpen
+  FaFolderOpen,
+  FaTimes
 } from 'react-icons/fa';
 import { GiScales } from 'react-icons/gi';
 import LogoutModal from '../common/LogoutModal';
+import { useNotifications } from '../../contexts/NotificationContext';
 
 const Header = ({ 
   onAddClick, 
@@ -46,6 +48,16 @@ const Header = ({
   const [isHoveringCases, setIsHoveringCases] = useState(false);
   const [localUser, setLocalUser] = useState(null);
   
+  // ✅ Get real-time notifications from context
+  const { 
+    notifications: realNotifications, 
+    unreadCount, 
+    isConnected, 
+    markAsRead, 
+    markAllAsRead, 
+    deleteNotification 
+  } = useNotifications();
+
   const profileRef = useRef(null);
   const notificationRef = useRef(null);
   const searchRef = useRef(null);
@@ -53,16 +65,64 @@ const Header = ({
   let hoverTimeout = null;
 
   // ============================================
+  // ✅ Get notification icon based on type
+  // ============================================
+  const getNotificationIcon = (type) => {
+    const icons = {
+      'case_created': '📋',
+      'case_updated': '✏️',
+      'case_status_changed': '🔄',
+      'comment_added': '💬',
+      'proceeding_added': '⚖️',
+      'party_added': '👤',
+      'attachment_uploaded': '📎',
+      'case_assigned': '👨‍⚖️',
+      'reminder': '⏰',
+      'case_closed': '✅',
+      'hearing_scheduled': '📅',
+      'document_uploaded': '📄'
+    };
+    return icons[type] || '🔔';
+  };
+
+  // ============================================
+  // ✅ FIXED: Format time for display
+  // ============================================
+  const formatTime = (date) => {
+    if (!date) return 'Just now';
+    
+    try {
+      const now = new Date();
+      const past = new Date(date);
+      
+      // Check if date is valid
+      if (isNaN(past.getTime())) {
+        return 'Just now';
+      }
+      
+      const diff = Math.floor((now - past) / 1000);
+      
+      if (diff < 60) return 'Just now';
+      if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+      if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+      if (diff < 2592000) return `${Math.floor(diff / 86400)}d ago`;
+      if (diff < 31536000) return `${Math.floor(diff / 2592000)}mo ago`;
+      return `${Math.floor(diff / 31536000)}y ago`;
+    } catch (error) {
+      console.error('Error formatting time:', error);
+      return 'Just now';
+    }
+  };
+
+  // ============================================
   // LOAD USER FROM PROPS OR LOCAL STORAGE
   // ============================================
   useEffect(() => {
-    // First check if user is passed as prop
     if (propUser) {
       setLocalUser(propUser);
       return;
     }
 
-    // If no prop, load from localStorage
     const loadUser = () => {
       try {
         const userData = localStorage.getItem('user');
@@ -77,17 +137,14 @@ const Header = ({
 
     loadUser();
 
-    // Listen for user updates from Profile page
     const handleUserUpdate = (event) => {
       console.log('🔄 Header received user update:', event.detail);
       setLocalUser(event.detail);
-      // Update localStorage
       localStorage.setItem('user', JSON.stringify(event.detail));
     };
 
     window.addEventListener('userUpdated', handleUserUpdate);
 
-    // Listen for storage changes (if user updates in another tab)
     const handleStorageChange = (e) => {
       if (e.key === 'user' && e.newValue) {
         try {
@@ -116,7 +173,7 @@ const Header = ({
     role: 'Senior Attorney'
   };
 
-  // Navigation items with Cases dropdown
+  // Navigation items
   const navItems = [
     { id: 'dashboard', icon: FaHome, label: 'Dashboard' },
     { 
@@ -131,14 +188,16 @@ const Header = ({
     { id: 'reports', icon: FaChartBar, label: 'Reports' },
   ];
 
-  const notifications = [
-    { id: 1, title: 'New case assigned to you', time: '5 min ago', read: false, icon: '📋' },
-    { id: 2, title: 'Case #1234 status updated', time: '1 hour ago', read: false, icon: '🔄' },
-    { id: 3, title: 'Hearing scheduled for tomorrow', time: '3 hours ago', read: true, icon: '⚖️' },
-    { id: 4, title: 'New reference case added', time: '2 hours ago', read: false, icon: '📚' },
-  ];
-
-  const unreadCount = notifications.filter(n => !n.read).length;
+  // ✅ Use real notifications from context
+  const notifications = realNotifications.map(n => ({
+    id: n._id,
+    title: n.title,
+    time: n.createdAt || n.time || new Date().toISOString(),
+    read: n.read,
+    icon: getNotificationIcon(n.type),
+    message: n.message,
+    data: n.data
+  }));
 
   const getUserInitials = () => {
     const name = displayUser?.name || 'User';
@@ -155,36 +214,22 @@ const Header = ({
 
   const handleNavClick = (itemId) => {
     console.log('🔘 Header nav clicked:', itemId);
-    
     setIsProfileOpen(false);
     setIsCasesDropdownOpen(false);
     
     if (itemId === 'profile') {
-      console.log('👤 Navigating to Profile page');
-      if (onNavigate) {
-        onNavigate('profile');
-      }
+      if (onNavigate) onNavigate('profile');
       return;
     }
-    
     if (itemId === 'settings') {
-      console.log('⚙️ Navigating to Settings page');
-      if (onNavigate) {
-        onNavigate('settings');
-      }
+      if (onNavigate) onNavigate('settings');
       return;
     }
-    
-    if (onNavigate) {
-      onNavigate(itemId);
-    }
+    if (onNavigate) onNavigate(itemId);
   };
 
   const handleDropdownItemClick = (itemId) => {
-    console.log('📋 Dropdown item clicked:', itemId);
-    if (onNavigate) {
-      onNavigate(itemId);
-    }
+    if (onNavigate) onNavigate(itemId);
     setIsCasesDropdownOpen(false);
   };
 
@@ -199,15 +244,11 @@ const Header = ({
   const handleConfirmLogout = async () => {
     setIsLoggingOut(true);
     try {
-      if (onLogout) {
-        await onLogout();
-      }
-      // Clear local storage
+      if (onLogout) await onLogout();
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       localStorage.removeItem('auth_token');
       localStorage.removeItem('refresh_token');
-      // Redirect to login
       window.location.href = '/login';
     } catch (error) {
       console.error('Logout error:', error);
@@ -219,6 +260,28 @@ const Header = ({
 
   const handleCloseLogoutModal = () => {
     setIsLogoutModalOpen(false);
+  };
+
+  // ============================================
+  // ✅ MARK NOTIFICATION AS READ
+  // ============================================
+  const handleMarkAsRead = async (notificationId) => {
+    await markAsRead(notificationId);
+  };
+
+  // ============================================
+  // ✅ MARK ALL AS READ
+  // ============================================
+  const handleMarkAllRead = async () => {
+    await markAllAsRead();
+  };
+
+  // ============================================
+  // ✅ DELETE NOTIFICATION
+  // ============================================
+  const handleDeleteNotification = async (notificationId, e) => {
+    e.stopPropagation();
+    await deleteNotification(notificationId);
   };
 
   const handleMouseEnter = () => {
@@ -260,20 +323,12 @@ const Header = ({
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      console.log('Searching for:', searchQuery);
-      if (onNavigate) {
-        onNavigate('search', { query: searchQuery });
-      }
+      if (onNavigate) onNavigate('search', { query: searchQuery });
       setIsSearchOpen(false);
       setSearchQuery('');
     }
   };
 
-  const markAllRead = () => {
-    console.log('Marking all notifications as read');
-  };
-
-  // Check if any case-related page is active
   const isCaseActive = () => {
     return activePage === 'cases' || 
            activePage === 'reference-cases' || 
@@ -296,7 +351,6 @@ const Header = ({
               <button 
                 onClick={onMenuClick}
                 className="lg:hidden p-2 text-[#BBE1FA]/60 hover:text-[#3282B8] hover:bg-[#3282B8]/10 rounded-xl transition-all duration-200"
-                aria-label="Toggle menu"
               >
                 <FaBars className="text-lg" />
               </button>
@@ -363,7 +417,6 @@ const Header = ({
                           </div>
 
                           <div className="py-1 max-h-[400px] overflow-y-auto bg-[#1B262C]">
-                            {/* All Cases */}
                             <button
                               onClick={() => handleDropdownItemClick('cases')}
                               className={`w-full flex items-center gap-3 px-4 py-2.5 transition-all duration-200 group ${
@@ -388,7 +441,6 @@ const Header = ({
                               </span>
                             </button>
 
-                            {/* Solved Cases */}
                             {solvedCases?.length > 0 && (
                               <>
                                 <div className="px-4 py-1">
@@ -420,7 +472,6 @@ const Header = ({
                               </>
                             )}
 
-                            {/* Reference Cases - ALWAYS VISIBLE */}
                             <div className="px-4 py-1">
                               <div className="border-t border-[#3282B8]/20"></div>
                             </div>
@@ -449,7 +500,6 @@ const Header = ({
                             </button>
                           </div>
 
-                          {/* Footer */}
                           <div className="px-4 py-2 border-t border-[#3282B8]/20 bg-[#1B262C]/80">
                             <button
                               onClick={() => handleDropdownItemClick('cases')}
@@ -498,7 +548,6 @@ const Header = ({
                 <button 
                   onClick={() => setIsSearchOpen(!isSearchOpen)}
                   className="p-2 text-[#BBE1FA]/60 hover:text-[#3282B8] hover:bg-[#3282B8]/10 rounded-xl transition-all duration-200"
-                  aria-label="Search"
                 >
                   <FaSearch className="text-sm" />
                 </button>
@@ -531,65 +580,107 @@ const Header = ({
                 )}
               </div>
               
-              {/* Notifications */}
+              {/* ✅ Notifications - Real-time */}
               <div className="relative" ref={notificationRef}>
                 <button 
                   onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
                   className="relative p-2 text-[#BBE1FA]/60 hover:text-[#3282B8] hover:bg-[#3282B8]/10 rounded-xl transition-all duration-200"
-                  aria-label="Notifications"
                 >
                   <FaBell className="text-sm" />
                   {unreadCount > 0 && (
-                    <span className="absolute top-1 right-1 w-2 h-2 bg-[#EF4444] rounded-full ring-2 ring-[#1B262C] animate-pulse"></span>
+                    <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full animate-pulse ring-2 ring-[#1B262C]">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
                   )}
+                  {/* Connection status dot */}
+                  <span className={`absolute -bottom-1 -right-1 w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'} ring-1 ring-[#1B262C]`}></span>
                 </button>
 
                 {isNotificationsOpen && (
-                  <div className="absolute right-0 mt-2 w-80 bg-white border border-[#3282B8] rounded-xl shadow-premium-lg overflow-hidden">
-                    <div className="p-4 border-b border-[#BBE1FA] bg-[#F0F4F8]">
+                  <div className="absolute right-0 mt-2 w-96 bg-[#1B262C] border border-[#3282B8]/30 rounded-xl shadow-2xl shadow-[#0F4C75]/20 overflow-hidden max-h-[500px] flex flex-col">
+                    {/* Header */}
+                    <div className="p-4 border-b border-[#3282B8]/20 bg-[#1B262C]/80 flex-shrink-0">
                       <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-semibold text-[#1B262C]">Notifications</h3>
-                        {unreadCount > 0 && (
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-semibold text-white">Notifications</h3>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full ${isConnected ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                            {isConnected ? '🟢 Live' : '🔴 Offline'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {unreadCount > 0 && (
+                            <button 
+                              onClick={handleMarkAllRead}
+                              className="text-xs text-[#3282B8] hover:text-[#BBE1FA] transition-colors font-medium"
+                            >
+                              Mark all read
+                            </button>
+                          )}
                           <button 
-                            onClick={markAllRead}
-                            className="text-xs text-[#0F4C75] hover:text-[#3282B8] transition-colors font-medium"
+                            onClick={() => setIsNotificationsOpen(false)}
+                            className="text-[#BBE1FA]/50 hover:text-white transition-colors"
                           >
-                            Mark all read
+                            <FaTimes className="text-xs" />
                           </button>
-                        )}
+                        </div>
                       </div>
                     </div>
-                    <div className="max-h-80 overflow-y-auto">
+
+                    {/* Notification List */}
+                    <div className="flex-1 overflow-y-auto">
                       {notifications.length > 0 ? (
                         notifications.map((notif) => (
                           <div 
                             key={notif.id} 
-                            className={`p-4 hover:bg-[#F0F4F8] transition-colors cursor-pointer ${!notif.read ? 'border-l-2 border-[#0F4C75]' : ''}`}
+                            className={`p-4 hover:bg-[#3282B8]/10 transition-colors cursor-pointer border-b border-[#3282B8]/10 ${!notif.read ? 'bg-[#3282B8]/5 border-l-2 border-l-[#3282B8]' : ''}`}
+                            onClick={() => {
+                              if (!notif.read) {
+                                handleMarkAsRead(notif.id);
+                              }
+                            }}
                           >
                             <div className="flex items-start gap-3">
-                              <span className="text-xl">{notif.icon}</span>
-                              <div className="flex-1">
-                                <p className={`text-sm ${!notif.read ? 'text-[#1B262C] font-medium' : 'text-[#6B7280]'}`}>{notif.title}</p>
-                                <p className="text-xs text-[#6B7280] mt-1">{notif.time}</p>
+                              <span className="text-xl flex-shrink-0">{notif.icon}</span>
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm ${!notif.read ? 'text-white font-medium' : 'text-[#BBE1FA]/70'}`}>
+                                  {notif.title}
+                                </p>
+                                <p className="text-xs text-[#BBE1FA]/50 mt-0.5 truncate">
+                                  {notif.message || notif.time}
+                                </p>
+                                <p className="text-[10px] text-[#BBE1FA]/30 mt-1">
+                                  {formatTime(notif.time)}
+                                </p>
                               </div>
-                              {!notif.read && (
-                                <div className="w-2 h-2 bg-[#0F4C75] rounded-full mt-1"></div>
-                              )}
+                              <button
+                                onClick={(e) => handleDeleteNotification(notif.id, e)}
+                                className="flex-shrink-0 text-[#BBE1FA]/20 hover:text-red-400 transition-colors"
+                              >
+                                <FaTimes className="text-xs" />
+                              </button>
                             </div>
                           </div>
                         ))
                       ) : (
                         <div className="p-8 text-center">
-                          <div className="text-4xl mb-2">🔔</div>
-                          <p className="text-[#6B7280] text-sm">No notifications</p>
+                          <div className="text-4xl mb-2">🔕</div>
+                          <p className="text-[#BBE1FA]/60 text-sm">No notifications</p>
+                          <p className="text-[#BBE1FA]/30 text-xs mt-1">You're all caught up!</p>
                         </div>
                       )}
                     </div>
-                    <div className="p-3 border-t border-[#BBE1FA] bg-[#F0F4F8] text-center">
-                      <button className="text-sm text-[#0F4C75] hover:text-[#3282B8] transition-colors font-medium">
-                        View all notifications
-                      </button>
-                    </div>
+
+                    {/* Footer */}
+                    {notifications.length > 0 && (
+                      <div className="p-3 border-t border-[#3282B8]/20 bg-[#1B262C]/80 flex-shrink-0 text-center">
+                        <button 
+                          onClick={() => setIsNotificationsOpen(false)}
+                          className="text-xs text-[#3282B8] hover:text-[#BBE1FA] transition-colors font-medium"
+                        >
+                          View all ({notifications.length})
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -599,7 +690,6 @@ const Header = ({
                 <button 
                   onClick={() => setIsProfileOpen(!isProfileOpen)}
                   className="flex items-center gap-2 px-2 py-1 hover:bg-[#3282B8]/10 rounded-xl transition-all duration-200"
-                  aria-label="Profile"
                 >
                   <div className="w-8 h-8 gradient-accent rounded-full flex items-center justify-center text-white font-semibold text-xs shadow-lg shadow-[#0F4C75]/25">
                     {getUserInitials()}
@@ -656,7 +746,6 @@ const Header = ({
                       </button>
                     </div>
                     
-                    {/* Divider */}
                     <div className="border-t border-[#3282B8]/20 py-1 bg-[#1B262C]">
                       <button 
                         onClick={handleLogoutClick}
@@ -674,7 +763,6 @@ const Header = ({
               <button
                 onClick={onAddClick}
                 className="btn-primary text-sm py-1.5 px-4 flex items-center gap-1.5"
-                aria-label="Add new case"
               >
                 <FaPlusCircle className="text-xs" />
                 <span className="hidden sm:inline">New Case</span>

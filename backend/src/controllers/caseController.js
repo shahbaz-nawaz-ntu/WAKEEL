@@ -1,423 +1,620 @@
 // backend/src/controllers/caseController.js
 import Case from '../models/Case.js';
-import logger from '../utils/logger.js';
+import User from '../models/User.js';
+import { createNotification } from './notificationController.js';
 
-// @desc    Get all cases
-// @route   GET /api/cases
-// @access  Private
-export const getCases = async (req, res) => {
-  try {
-    const { status, priority, caseType, search } = req.query;
-    
-    let query = { createdBy: req.user.id };
-    
-    if (status) query.status = status;
-    if (priority) query.priority = priority;
-    if (caseType) query.caseType = caseType;
-    
-    if (search) {
-      query.$or = [
-        { caseTitle: { $regex: search, $options: 'i' } },
-        { caseNumber: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { party: { $regex: search, $options: 'i' } },
-      ];
+// ============================================
+// 🆔 GENERATE UNIQUE CASE NUMBER
+// ============================================
+const generateCaseNumber = async () => {
+  const year = new Date().getFullYear();
+  const prefix = `${year}-CV-`;
+  
+  // Find the last case number with this prefix
+  const lastCase = await Case.findOne({ 
+    caseNumber: { $regex: `^${prefix}` } 
+  }).sort({ caseNumber: -1 });
+  
+  let nextNumber = 1;
+  if (lastCase) {
+    const match = lastCase.caseNumber.match(/\d+$/);
+    if (match) {
+      nextNumber = parseInt(match[0]) + 1;
     }
-    
-    const cases = await Case.find(query)
-      .populate('createdBy', 'name email')
-      .populate('assignedToUser', 'name email')
-      .populate('clientId', 'name email')
-      .sort({ createdAt: -1 });
-    
-    // ✅ Format cases to ensure all fields are present
-    const formattedCases = cases.map(c => {
-      const obj = c.toJSON ? c.toJSON() : { ...c };
-      return {
-        ...obj,
-        id: obj._id?.toString() || obj.id,
-        // ✅ Fields from AddCaseModal
-        nameOfCourt: obj.nameOfCourt || '',
-        natureOfCase: obj.natureOfCase || '',
-        nextDateOfHearing: obj.nextDateOfHearing || '',
-        copyOfSummon: obj.copyOfSummon || '',
-        copyOfPlaint: obj.copyOfPlaint || '',
-        relevantDepartmentalRecord: obj.relevantDepartmentalRecord || '',
-        lawOfficer: obj.lawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
-        alternateLawOfficer: obj.alternateLawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
-        writtenStatements: obj.writtenStatements || [],
-        caseTitle: obj.caseTitle || obj.title || '',
-        title: obj.title || obj.caseTitle || '',
-        plaintiff: obj.plaintiff || '',
-        defendant: obj.defendant || '',
-        division: obj.division || '',
-        district: obj.district || '',
-        caseNumber: obj.caseNumber || '',
-        status: obj.status || 'active',
-        courtDetails: obj.courtDetails || {},
-        caseNature: obj.caseNature || {},
-        attachments: obj.attachments || {},
-      };
-    });
-    
-    res.json({ success: true, count: formattedCases.length, data: formattedCases });
-  } catch (error) {
-    logger.error(`Get cases error: ${error}`);
-    res.status(500).json({ success: false, error: error.message });
   }
+  
+  // Pad with zeros to make 4 digits
+  const paddedNumber = String(nextNumber).padStart(4, '0');
+  const caseNumber = `${prefix}${paddedNumber}`;
+  
+  // Verify uniqueness
+  const existing = await Case.findOne({ caseNumber });
+  if (existing) {
+    // If somehow a duplicate exists, recursively try again
+    return generateCaseNumber();
+  }
+  
+  return caseNumber;
 };
 
-// @desc    Get single case
-// @route   GET /api/cases/:id
-// @access  Private
-export const getCase = async (req, res) => {
+// ============================================
+// 🆔 CHECK IF CASE NUMBER EXISTS
+// ============================================
+export const checkCaseNumber = async (req, res) => {
   try {
-    const caseItem = await Case.findOne({ 
-      _id: req.params.id, 
-      createdBy: req.user.id 
-    })
-      .populate('createdBy', 'name email')
-      .populate('assignedToUser', 'name email')
-      .populate('clientId', 'name email');
-    
-    if (!caseItem) {
-      return res.status(404).json({ success: false, error: 'Case not found' });
-    }
-    
-    const obj = caseItem.toJSON ? caseItem.toJSON() : { ...caseItem };
-    const formattedCase = {
-      ...obj,
-      id: obj._id?.toString() || obj.id,
-      // ✅ Fields from AddCaseModal
-      nameOfCourt: obj.nameOfCourt || '',
-      natureOfCase: obj.natureOfCase || '',
-      nextDateOfHearing: obj.nextDateOfHearing || '',
-      copyOfSummon: obj.copyOfSummon || '',
-      copyOfPlaint: obj.copyOfPlaint || '',
-      relevantDepartmentalRecord: obj.relevantDepartmentalRecord || '',
-      lawOfficer: obj.lawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
-      alternateLawOfficer: obj.alternateLawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
-      writtenStatements: obj.writtenStatements || [],
-    };
-    
-    res.json({ success: true, data: formattedCase });
-  } catch (error) {
-    logger.error(`Get case error: ${error}`);
-    res.status(500).json({ success: false, error: error.message });
-  }
-};
-
-// @desc    Create a case - FIXED
-// @route   POST /api/cases
-// @access  Private
-export const createCase = async (req, res) => {
-  try {
-    console.log('📥 ========== CREATE CASE ==========');
-    console.log('📥 Received body:', JSON.stringify(req.body, null, 2));
-    console.log('📥 User ID:', req.user.id);
-
-    // ✅ Get all fields from request body
-    const caseData = {
-      // ✅ Required fields
-      createdBy: req.user.id,
-      
-      // ✅ Case fields
-      caseTitle: req.body.caseTitle || req.body.title || 'Untitled Case',
-      title: req.body.title || req.body.caseTitle || 'Untitled Case',
-      caseNumber: req.body.caseNumber || '',
-      division: req.body.division || '',
-      district: req.body.district || '',
-      plaintiff: req.body.plaintiff || '',
-      defendant: req.body.defendant || '',
-      status: req.body.status || 'active',
-      caseType: req.body.caseType || 'Civil',
-      priority: req.body.priority || 'Medium',
-      
-      // ✅ Court fields
-      nameOfCourt: req.body.nameOfCourt || '',
-      courtName: req.body.courtName || req.body.nameOfCourt || '',
-      courtDetails: req.body.courtDetails || {},
-      
-      // ✅ Case nature
-      natureOfCase: req.body.natureOfCase || '',
-      caseNature: req.body.caseNature || {},
-      
-      // ✅ Dates
-      nextDateOfHearing: req.body.nextDateOfHearing || '',
-      nextDate: req.body.nextDate || req.body.nextDateOfHearing || '',
-      nexthearing: req.body.nexthearing || req.body.nextDateOfHearing || '',
-      
-      // ✅ Attachments
-      copyOfSummon: req.body.copyOfSummon || '',
-      copyOfPlaint: req.body.copyOfPlaint || '',
-      relevantDepartmentalRecord: req.body.relevantDepartmentalRecord || '',
-      attachments: req.body.attachments || {},
-      
-      // ✅ Law Officers
-      lawOfficer: req.body.lawOfficer || { 
-        type: 'Department Representative', 
-        name: '', 
-        designation: '', 
-        officeAddress: '', 
-        officialNumber: '', 
-        cellNumber: '' 
-      },
-      alternateLawOfficer: req.body.alternateLawOfficer || { 
-        type: 'Department Representative', 
-        name: '', 
-        designation: '', 
-        officeAddress: '', 
-        officialNumber: '', 
-        cellNumber: '' 
-      },
-      
-      // ✅ Written Statements
-      writtenStatements: req.body.writtenStatements || [],
-      
-      // ✅ Other fields
-      party: req.body.party || 'N/A',
-      amount: req.body.amount || 'N/A',
-      judge: req.body.judge || 'N/A',
-      assignedTo: req.body.assignedTo || 'N/A',
-      hearings: req.body.hearings || 0,
-      date: req.body.date || new Date().toISOString().split('T')[0],
-      description: req.body.description || '',
-      remarks: req.body.remarks || '',
-      courtNo: req.body.courtNo || '',
-      cmsNo: req.body.cmsNo || '',
-      officeNo: req.body.officeNo || '',
-      instituteDate: req.body.instituteDate || '',
-      instituteNo: req.body.instituteNo || '',
-      documentsCount: req.body.documentsCount || 0,
-      documents: req.body.documents || {},
-    };
-
-    console.log('📦 Final case data to save:', JSON.stringify(caseData, null, 2));
-
-    const caseItem = await Case.create(caseData);
-    
-    console.log('✅ Case created successfully:', caseItem._id);
-    logger.info(`Case created: ${caseItem.caseNumber} by ${req.user.email}`);
-    
-    // ✅ Return the created case with all fields
-    const createdCase = await Case.findById(caseItem._id);
-    const obj = createdCase.toJSON ? createdCase.toJSON() : { ...createdCase };
-    const formattedCase = {
-      ...obj,
-      id: obj._id?.toString() || obj.id,
-      nameOfCourt: obj.nameOfCourt || '',
-      natureOfCase: obj.natureOfCase || '',
-      nextDateOfHearing: obj.nextDateOfHearing || '',
-      copyOfSummon: obj.copyOfSummon || '',
-      copyOfPlaint: obj.copyOfPlaint || '',
-      relevantDepartmentalRecord: obj.relevantDepartmentalRecord || '',
-      lawOfficer: obj.lawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
-      alternateLawOfficer: obj.alternateLawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
-      writtenStatements: obj.writtenStatements || [],
-    };
-    
-    res.status(201).json({ success: true, data: formattedCase });
-  } catch (error) {
-    console.error('❌ ========== ERROR ==========');
-    console.error('❌ Error name:', error.name);
-    console.error('❌ Error message:', error.message);
-    console.error('❌ Error stack:', error.stack);
-    
-    if (error.name === 'ValidationError') {
-      const errors = {};
-      for (const key in error.errors) {
-        errors[key] = error.errors[key].message;
-      }
-      console.error('❌ Validation errors:', errors);
-      return res.status(400).json({
-        success: false,
-        error: 'Validation error',
-        details: errors,
-      });
-    }
-    
-    if (error.code === 11000) {
-      console.error('❌ Duplicate key error:', error.keyPattern);
-      return res.status(400).json({
-        success: false,
-        error: 'Duplicate entry',
-        details: error.keyPattern,
-      });
-    }
-    
-    logger.error(`Create case error: ${error}`);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message || 'Failed to create case',
-    });
-  }
-};
-
-// @desc    Update a case - FIXED
-// @route   PUT /api/cases/:id
-// @access  Private
-export const updateCase = async (req, res) => {
-  try {
-    const caseItem = await Case.findOne({ 
-      _id: req.params.id, 
-      createdBy: req.user.id 
-    });
-    
-    if (!caseItem) {
-      return res.status(404).json({ success: false, error: 'Case not found' });
-    }
-
-    console.log('📝 Updating case:', req.params.id);
-    console.log('📝 Update data:', req.body);
-
-    // ✅ All fields that can be updated
-    const updateFields = [
-      'caseTitle', 'title', 'caseNumber', 'division', 'district',
-      'plaintiff', 'defendant', 'status', 'caseType', 'priority',
-      'nameOfCourt', 'courtName', 'courtDetails',
-      'natureOfCase', 'caseNature',
-      'nextDateOfHearing', 'nextDate', 'nexthearing',
-      'copyOfSummon', 'copyOfPlaint', 'relevantDepartmentalRecord', 'attachments',
-      'lawOfficer', 'alternateLawOfficer',
-      'writtenStatements',
-      'party', 'amount', 'judge', 'assignedTo', 'hearings', 'date',
-      'description', 'remarks', 'courtNo', 'cmsNo', 'officeNo',
-      'instituteDate', 'instituteNo', 'documentsCount', 'documents'
-    ];
-    
-    updateFields.forEach(field => {
-      if (req.body[field] !== undefined && req.body[field] !== null) {
-        caseItem[field] = req.body[field];
-      }
-    });
-
-    caseItem.updatedAt = Date.now();
-    await caseItem.save();
-
-    const obj = caseItem.toJSON ? caseItem.toJSON() : { ...caseItem };
-    const formattedCase = {
-      ...obj,
-      id: obj._id?.toString() || obj.id,
-      nameOfCourt: obj.nameOfCourt || '',
-      natureOfCase: obj.natureOfCase || '',
-      nextDateOfHearing: obj.nextDateOfHearing || '',
-      copyOfSummon: obj.copyOfSummon || '',
-      copyOfPlaint: obj.copyOfPlaint || '',
-      relevantDepartmentalRecord: obj.relevantDepartmentalRecord || '',
-      lawOfficer: obj.lawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
-      alternateLawOfficer: obj.alternateLawOfficer || { type: 'Department Representative', name: '', designation: '', officeAddress: '', officialNumber: '', cellNumber: '' },
-      writtenStatements: obj.writtenStatements || [],
-    };
-
-    logger.info(`Case updated: ${caseItem.caseNumber}`);
-    
-    res.json({ success: true, data: formattedCase });
-  } catch (error) {
-    console.error('❌ Update case error:', error);
-    logger.error(`Update case error: ${error}`);
-    res.status(500).json({ success: false, error: error.message });
-  }
-};
-
-// @desc    Delete a case
-// @route   DELETE /api/cases/:id
-// @access  Private
-export const deleteCase = async (req, res) => {
-  try {
-    const caseItem = await Case.findOne({ 
-      _id: req.params.id, 
-      createdBy: req.user.id 
-    });
-    
-    if (!caseItem) {
-      return res.status(404).json({ success: false, error: 'Case not found' });
-    }
-
-    await caseItem.deleteOne();
-    
-    logger.info(`Case deleted: ${caseItem.caseNumber}`);
-    
-    res.json({ success: true, data: {} });
-  } catch (error) {
-    logger.error(`Delete case error: ${error}`);
-    res.status(500).json({ success: false, error: error.message });
-  }
-};
-
-// @desc    Update case status
-// @route   PATCH /api/cases/:id/status
-// @access  Private
-export const updateCaseStatus = async (req, res) => {
-  try {
-    const { status } = req.body;
-    
-    const caseItem = await Case.findOne({ 
-      _id: req.params.id, 
-      createdBy: req.user.id 
-    });
-    
-    if (!caseItem) {
-      return res.status(404).json({ success: false, error: 'Case not found' });
-    }
-
-    caseItem.status = status;
-    caseItem.updatedAt = Date.now();
-    await caseItem.save();
-    
-    logger.info(`Case status updated: ${caseItem.caseNumber} -> ${status}`);
-    
-    const obj = caseItem.toJSON ? caseItem.toJSON() : { ...caseItem };
-    const formattedCase = {
-      ...obj,
-      id: obj._id?.toString() || obj.id,
-    };
-    
-    res.json({ success: true, data: formattedCase });
-  } catch (error) {
-    logger.error(`Update case status error: ${error}`);
-    res.status(500).json({ success: false, error: error.message });
-  }
-};
-
-// @desc    Get case statistics
-// @route   GET /api/cases/stats
-// @access  Private
-export const getCaseStats = async (req, res) => {
-  try {
-    const cases = await Case.find({ createdBy: req.user.id });
-    
-    const total = cases.length;
-    const active = cases.filter(c => c.status === 'active').length;
-    const pending = cases.filter(c => c.status === 'pending').length;
-    const closed = cases.filter(c => c.status === 'closed').length;
-    
-    const priorityStats = {
-      High: cases.filter(c => c.priority === 'High').length,
-      Urgent: cases.filter(c => c.priority === 'Urgent').length,
-      Medium: cases.filter(c => c.priority === 'Medium').length,
-      Low: cases.filter(c => c.priority === 'Low').length,
-    };
-    
-    const typeStats = {};
-    cases.forEach(c => {
-      if (c.caseType) {
-        typeStats[c.caseType] = (typeStats[c.caseType] || 0) + 1;
-      }
-    });
+    const { caseNumber } = req.params;
+    const existingCase = await Case.findOne({ caseNumber });
     
     res.json({
+      exists: !!existingCase,
+      caseNumber
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// ============================================
+// 📋 GET ALL CASES
+// ============================================
+export const getCases = async (req, res) => {
+  try {
+    const cases = await Case.find({}).sort({ createdAt: -1 });
+    
+    const formattedCases = cases.map(c => ({
+      ...c.toJSON(),
+      id: c._id.toString()
+    }));
+    
+    res.status(200).json({
+      success: true,
+      count: formattedCases.length,
+      data: formattedCases
+    });
+  } catch (error) {
+    console.error('Error fetching cases:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// ============================================
+// 📋 GET SINGLE CASE
+// ============================================
+export const getCase = async (req, res) => {
+  try {
+    const caseItem = await Case.findById(req.params.id);
+    
+    if (!caseItem) {
+      return res.status(404).json({
+        success: false,
+        message: 'Case not found'
+      });
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: caseItem
+    });
+  } catch (error) {
+    console.error('Error fetching case:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// ============================================
+// 📝 CREATE A CASE
+// ============================================
+export const createCase = async (req, res) => {
+  try {
+    console.log('📝 Creating case with data:', req.body);
+    console.log('📎 Files:', req.files);
+    
+    // Process uploaded files
+    const attachments = {};
+    if (req.files) {
+      if (req.files.copyOfSummon) {
+        attachments.copyOfSummon = req.files.copyOfSummon[0].filename;
+        attachments.copyOfSummonUrl = `/uploads/${req.files.copyOfSummon[0].filename}`;
+      }
+      if (req.files.copyOfPlaint) {
+        attachments.copyOfPlaint = req.files.copyOfPlaint[0].filename;
+        attachments.copyOfPlaintUrl = `/uploads/${req.files.copyOfPlaint[0].filename}`;
+      }
+      if (req.files.relevantDepartmentalRecord) {
+        attachments.relevantDepartmentalRecord = req.files.relevantDepartmentalRecord[0].filename;
+        attachments.relevantDepartmentalRecordUrl = `/uploads/${req.files.relevantDepartmentalRecord[0].filename}`;
+      }
+    }
+    
+    // ✅ AUTO-GENERATE CASE NUMBER if not provided
+    let caseNumber = req.body.caseNumber;
+    if (!caseNumber || caseNumber === '' || caseNumber === 'auto') {
+      caseNumber = await generateCaseNumber();
+      console.log('🆔 Auto-generated case number:', caseNumber);
+    } else {
+      // Check if provided case number already exists
+      const existing = await Case.findOne({ caseNumber });
+      if (existing) {
+        console.log('⚠️ Case number already exists, generating new one...');
+        caseNumber = await generateCaseNumber();
+        console.log('🆔 New case number:', caseNumber);
+      }
+    }
+    
+    // Merge attachments with request body
+    const caseData = {
+      ...req.body,
+      caseNumber, // ✅ Use the (possibly new) case number
+      ...attachments,
+      createdBy: req.user._id
+    };
+    
+    // Parse JSON fields if they are strings
+    if (typeof caseData.caseNature === 'string') {
+      try {
+        caseData.caseNature = JSON.parse(caseData.caseNature);
+      } catch (e) {
+        caseData.caseNature = { trial: caseData.caseNature };
+      }
+    }
+    
+    if (typeof caseData.courtDetails === 'string') {
+      try {
+        caseData.courtDetails = JSON.parse(caseData.courtDetails);
+      } catch (e) {
+        caseData.courtDetails = { courtName: caseData.courtDetails };
+      }
+    }
+    
+    if (typeof caseData.associate === 'string') {
+      try {
+        caseData.associate = JSON.parse(caseData.associate);
+      } catch (e) {
+        caseData.associate = {};
+      }
+    }
+    
+    if (typeof caseData.documents === 'string') {
+      try {
+        caseData.documents = JSON.parse(caseData.documents);
+      } catch (e) {
+        caseData.documents = {};
+      }
+    }
+    
+    if (typeof caseData.attachments === 'string') {
+      try {
+        caseData.attachments = JSON.parse(caseData.attachments);
+      } catch (e) {
+        caseData.attachments = {};
+      }
+    }
+    
+    if (typeof caseData.lawOfficer === 'string') {
+      try {
+        caseData.lawOfficer = JSON.parse(caseData.lawOfficer);
+      } catch (e) {
+        caseData.lawOfficer = {};
+      }
+    }
+    
+    if (typeof caseData.alternateLawOfficer === 'string') {
+      try {
+        caseData.alternateLawOfficer = JSON.parse(caseData.alternateLawOfficer);
+      } catch (e) {
+        caseData.alternateLawOfficer = {};
+      }
+    }
+    
+    // ✅ Create the case
+    const newCase = await Case.create(caseData);
+    console.log('✅ Case created with number:', newCase.caseNumber);
+    console.log('✅ Case ID:', newCase._id);
+    
+    // ============================================
+    // 🔔 SEND NOTIFICATIONS
+    // ============================================
+    console.log('🔔 ===== NOTIFICATION DEBUG START =====');
+    console.log('🔔 Case ID:', newCase._id);
+    console.log('🔔 Case Number:', newCase.caseNumber);
+    console.log('🔔 User ID:', req.user?._id);
+    
+    const io = req.app.get('io');
+    console.log('🔔 IO available:', io ? '✅ YES' : '❌ NO');
+    
+    // 1. Notify the user who created the case
+    if (req.user && req.user._id) {
+      const caseTitle = newCase.caseTitle || newCase.title || 'Untitled Case';
+      
+      console.log('🔔 Creating notification for user:', req.user._id);
+      console.log('🔔 Case title:', caseTitle);
+      
+      try {
+        const result = await createNotification(
+          req.user._id,
+          'case_created',
+          '📋 New Case Created',
+          `Case "${caseTitle}" (${newCase.caseNumber}) has been created successfully`,
+          {
+            caseId: newCase._id,
+            caseNumber: newCase.caseNumber,
+            caseTitle: caseTitle,
+            plaintiff: newCase.plaintiff,
+            defendant: newCase.defendant
+          },
+          req
+        );
+        
+        console.log('🔔 Notification created successfully! ✅');
+      } catch (notifError) {
+        console.error('❌ Error creating notification:', notifError);
+      }
+    } else {
+      console.log('❌ No user found in request, skipping notification');
+    }
+    
+    // 2. Notify all admin users (optional)
+    try {
+      const admins = await User.find({ role: 'admin' });
+      const caseTitle = newCase.caseTitle || newCase.title || 'Untitled Case';
+      const creatorName = req.user?.name || 'A user';
+      
+      console.log(`🔔 Found ${admins.length} admin(s)`);
+      
+      for (const admin of admins) {
+        if (admin._id.toString() !== req.user._id.toString()) {
+          console.log(`🔔 Sending admin notification to: ${admin._id}`);
+          await createNotification(
+            admin._id,
+            'case_created',
+            '📋 New Case Created',
+            `Case "${caseTitle}" (${newCase.caseNumber}) was created by ${creatorName}`,
+            {
+              caseId: newCase._id,
+              caseNumber: newCase.caseNumber,
+              caseTitle: caseTitle,
+              createdBy: creatorName,
+              createdById: req.user._id
+            },
+            req
+          );
+        }
+      }
+      if (admins.length > 0) {
+        console.log(`🔔 Notifications sent to ${admins.length} admin(s)`);
+      }
+    } catch (adminError) {
+      console.error('Error sending admin notifications:', adminError);
+    }
+    
+    console.log('🔔 ===== NOTIFICATION DEBUG END =====');
+    
+    res.status(201).json({
+      success: true,
+      data: newCase,
+      message: 'Case created successfully'
+    });
+  } catch (error) {
+    console.error('❌ Error creating case:', error);
+    
+    // ✅ Handle duplicate key error specifically
+    if (error.code === 11000) {
+      console.log('⚠️ Duplicate case number detected, retrying with new number...');
+      try {
+        const newCaseNumber = await generateCaseNumber();
+        console.log('🆔 New case number for retry:', newCaseNumber);
+        
+        const retryData = {
+          ...req.body,
+          caseNumber: newCaseNumber,
+          createdBy: req.user._id
+        };
+        
+        const retryCase = await Case.create(retryData);
+        console.log('✅ Case created on retry:', retryCase.caseNumber);
+        
+        return res.status(201).json({
+          success: true,
+          data: retryCase,
+          message: 'Case created successfully (auto-generated number)'
+        });
+      } catch (retryError) {
+        console.error('❌ Retry failed:', retryError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to create case after retry',
+          error: retryError.message
+        });
+      }
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// ============================================
+// 📝 UPDATE A CASE
+// ============================================
+export const updateCase = async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('📝 Updating case:', id);
+    
+    const existingCase = await Case.findById(id);
+    if (!existingCase) {
+      return res.status(404).json({
+        success: false,
+        message: 'Case not found'
+      });
+    }
+    
+    // Track what changed for notification
+    const changes = [];
+    const updateData = { ...req.body };
+    
+    // Parse JSON fields if they are strings
+    const jsonFields = ['caseNature', 'courtDetails', 'associate', 'documents', 'attachments', 'lawOfficer', 'alternateLawOfficer'];
+    jsonFields.forEach(field => {
+      if (typeof updateData[field] === 'string') {
+        try {
+          updateData[field] = JSON.parse(updateData[field]);
+        } catch (e) {
+          // Keep as string if not valid JSON
+        }
+      }
+    });
+    
+    // Track changes for notification
+    if (updateData.caseTitle && updateData.caseTitle !== existingCase.caseTitle) {
+      changes.push(`title changed to "${updateData.caseTitle}"`);
+    }
+    if (updateData.status && updateData.status !== existingCase.status) {
+      changes.push(`status changed to ${updateData.status}`);
+    }
+    if (updateData.plaintiff && updateData.plaintiff !== existingCase.plaintiff) {
+      changes.push(`plaintiff changed to "${updateData.plaintiff}"`);
+    }
+    if (updateData.defendant && updateData.defendant !== existingCase.defendant) {
+      changes.push(`defendant changed to "${updateData.defendant}"`);
+    }
+    
+    const updatedCase = await Case.findByIdAndUpdate(
+      id,
+      updateData,
+      { new: true, runValidators: true }
+    );
+    
+    if (!updatedCase) {
+      return res.status(404).json({
+        success: false,
+        message: 'Case not found'
+      });
+    }
+    
+    // ============================================
+    // 🔔 SEND NOTIFICATION FOR UPDATE
+    // ============================================
+    if (req.user && req.user._id && changes.length > 0) {
+      const caseTitle = updatedCase.caseTitle || updatedCase.title || 'Untitled Case';
+      const changeSummary = changes.join(', ');
+      
+      await createNotification(
+        req.user._id,
+        'case_updated',
+        '✏️ Case Updated',
+        `Case "${caseTitle}" has been updated: ${changeSummary}`,
+        {
+          caseId: updatedCase._id,
+          caseNumber: updatedCase.caseNumber,
+          caseTitle: caseTitle,
+          changes: changes,
+          updatedFields: Object.keys(updateData)
+        },
+        req
+      );
+      console.log('🔔 Update notification sent to:', req.user._id);
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: updatedCase,
+      message: 'Case updated successfully'
+    });
+  } catch (error) {
+    console.error('❌ Error updating case:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// ============================================
+// 🔄 UPDATE CASE STATUS
+// ============================================
+export const updateCaseStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status is required'
+      });
+    }
+    
+    const existingCase = await Case.findById(id);
+    if (!existingCase) {
+      return res.status(404).json({
+        success: false,
+        message: 'Case not found'
+      });
+    }
+    
+    const oldStatus = existingCase.status || 'unknown';
+    const updatedCase = await Case.findByIdAndUpdate(
+      id,
+      { status },
+      { new: true, runValidators: true }
+    );
+    
+    // ============================================
+    // 🔔 SEND NOTIFICATION FOR STATUS CHANGE
+    // ============================================
+    if (req.user && req.user._id && oldStatus !== status) {
+      const statusEmojis = {
+        'active': '🟢',
+        'pending': '🟡',
+        'closed': '🔴'
+      };
+      const emoji = statusEmojis[status] || '🔄';
+      const caseTitle = updatedCase.caseTitle || updatedCase.title || 'Untitled Case';
+      
+      await createNotification(
+        req.user._id,
+        'case_status_changed',
+        `${emoji} Case Status Changed`,
+        `Case "${caseTitle}" status changed from ${oldStatus} to ${status}`,
+        {
+          caseId: updatedCase._id,
+          caseNumber: updatedCase.caseNumber,
+          caseTitle: caseTitle,
+          oldStatus: oldStatus,
+          newStatus: status
+        },
+        req
+      );
+      
+      // Also notify the user who originally created the case if different
+      if (existingCase.createdBy && existingCase.createdBy.toString() !== req.user._id.toString()) {
+        await createNotification(
+          existingCase.createdBy,
+          'case_status_changed',
+          `${emoji} Case Status Changed`,
+          `Case "${caseTitle}" status changed from ${oldStatus} to ${status} by ${req.user.name || 'a user'}`,
+          {
+            caseId: updatedCase._id,
+            caseNumber: updatedCase.caseNumber,
+            caseTitle: caseTitle,
+            oldStatus: oldStatus,
+            newStatus: status,
+            changedBy: req.user.name
+          },
+          req
+        );
+      }
+      
+      console.log('🔔 Status change notification sent');
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: updatedCase,
+      message: 'Status updated successfully'
+    });
+  } catch (error) {
+    console.error('❌ Error updating status:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// ============================================
+// 🗑️ DELETE A CASE
+// ============================================
+export const deleteCase = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const deletedCase = await Case.findByIdAndDelete(id);
+    
+    if (!deletedCase) {
+      return res.status(404).json({
+        success: false,
+        message: 'Case not found'
+      });
+    }
+    
+    // ============================================
+    // 🔔 SEND NOTIFICATION FOR DELETION
+    // ============================================
+    if (req.user && req.user._id) {
+      const caseTitle = deletedCase.caseTitle || deletedCase.title || 'Untitled Case';
+      
+      await createNotification(
+        req.user._id,
+        'case_closed',
+        '🗑️ Case Deleted',
+        `Case "${caseTitle}" has been deleted`,
+        {
+          caseId: deletedCase._id,
+          caseNumber: deletedCase.caseNumber,
+          caseTitle: caseTitle
+        },
+        req
+      );
+      console.log('🔔 Deletion notification sent to:', req.user._id);
+    }
+    
+    res.status(200).json({
+      success: true,
+      message: 'Case deleted successfully'
+    });
+  } catch (error) {
+    console.error('❌ Error deleting case:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// ============================================
+// 📊 GET CASE STATISTICS
+// ============================================
+export const getCaseStats = async (req, res) => {
+  try {
+    const total = await Case.countDocuments();
+    const active = await Case.countDocuments({ status: 'active' });
+    const pending = await Case.countDocuments({ status: 'pending' });
+    const closed = await Case.countDocuments({ status: 'closed' });
+    
+    res.status(200).json({
       success: true,
       data: {
         total,
         active,
         pending,
-        closed,
-        priority: priorityStats,
-        types: typeStats,
-      },
+        closed
+      }
     });
   } catch (error) {
-    logger.error(`Get case stats error: ${error}`);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('Error fetching stats:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
   }
+};
+
+// ============================================
+// 📎 UPLOAD FILES (MULTER MIDDLEWARE)
+// ============================================
+export const uploadFiles = (req, res, next) => {
+  next();
 };

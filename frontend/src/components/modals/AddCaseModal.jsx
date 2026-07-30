@@ -1,4 +1,4 @@
-// src/components/modals/AddCaseModal.jsx
+// src/components/modals/AddCaseModal.jsx - WITH FILE UPLOAD
 import React, { useState, useRef, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { 
@@ -62,7 +62,7 @@ const Combobox = ({ options, value, onChange, placeholder, label, required, clas
         <input
           ref={inputRef}
           type="text"
-          value={value}
+          value={value || ''}
           onChange={handleInputChange}
           onFocus={() => setIsOpen(true)}
           placeholder={placeholder}
@@ -164,7 +164,6 @@ const AddCaseModal = ({ isOpen, onClose, onAdd }) => {
   });
 
   const [loading, setLoading] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState([]);
   const [showStatementEditor, setShowStatementEditor] = useState(false);
   const [editingStatementId, setEditingStatementId] = useState(null);
   const [statementTitle, setStatementTitle] = useState('');
@@ -475,10 +474,11 @@ const AddCaseModal = ({ isOpen, onClose, onAdd }) => {
     }
   };
 
-  // ===== SUBMIT =====
+  // ===== SUBMIT - WITH FILE UPLOAD =====
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Validation
     if (!formData.division) {
       toast.error('Please enter Division');
       return;
@@ -519,9 +519,35 @@ const AddCaseModal = ({ isOpen, onClose, onAdd }) => {
     setLoading(true);
     
     try {
-      const attachmentsObj = formData.attachments || {};
-      const attachmentsCount = Object.values(attachmentsObj).filter(v => v).length;
+      // ✅ Create FormData for file upload
+      const formDataToSend = new FormData();
       
+      // ✅ Add all text fields
+      formDataToSend.append('division', formData.division);
+      formDataToSend.append('district', formData.district);
+      formDataToSend.append('caseNumber', formData.caseNumber);
+      formDataToSend.append('caseTitle', formData.titleOfCase);
+      formDataToSend.append('title', formData.titleOfCase);
+      formDataToSend.append('plaintiff', formData.plaintiff);
+      formDataToSend.append('defendant', formData.defendant);
+      formDataToSend.append('nameOfCourt', formData.nameOfCourt);
+      formDataToSend.append('natureOfCase', formData.natureOfCase);
+      formDataToSend.append('nextDateOfHearing', formData.nextDateOfHearing);
+      formDataToSend.append('status', 'active');
+      formDataToSend.append('caseType', 'Civil');
+      formDataToSend.append('priority', 'Medium');
+      formDataToSend.append('party', 'N/A');
+      formDataToSend.append('amount', 'N/A');
+      formDataToSend.append('judge', 'N/A');
+      formDataToSend.append('assignedTo', 'N/A');
+      formDataToSend.append('hearings', '0');
+      formDataToSend.append('date', new Date().toISOString().split('T')[0]);
+      
+      // ✅ Add law officer data (as JSON string)
+      formDataToSend.append('lawOfficer', JSON.stringify(formData.lawOfficer));
+      formDataToSend.append('alternateLawOfficer', JSON.stringify(formData.alternateLawOfficer));
+      
+      // ✅ Add written statements (as JSON string)
       const statementsData = formData.writtenStatements.map(s => ({
         title: s.title,
         content: s.content || '',
@@ -529,65 +555,60 @@ const AddCaseModal = ({ isOpen, onClose, onAdd }) => {
         fileSize: s.fileSize || 0,
         createdAt: s.createdAt,
       }));
-
-      // ✅ Get current timestamp
-      const now = new Date().toISOString();
-
-      const submitData = {
-        division: formData.division,
-        district: formData.district,
-        caseNumber: formData.caseNumber,
-        status: 'active',
-        caseTitle: formData.titleOfCase,
-        title: formData.titleOfCase,
-        plaintiff: formData.plaintiff,
-        defendant: formData.defendant,
-        courtName: formData.nameOfCourt,
-        courtDetails: {
-          courtName: formData.nameOfCourt,
-          district: formData.district,
-          nextDate: formData.nextDateOfHearing,
-        },
-        caseNature: {
-          trial: formData.natureOfCase,
-        },
-        nextDate: formData.nextDateOfHearing,
-        nexthearing: formData.nextDateOfHearing,
-        attachments: {
-          copyOfSummon: formData.copyOfSummonName || '',
-          copyOfPlaint: formData.copyOfPlaintName || '',
-          relevantDepartmentalRecord: formData.relevantDepartmentalRecordName || '',
-        },
-        documents: formData.attachments || {},
-        documentsCount: attachmentsCount,
-        writtenStatements: statementsData,
-        lawOfficer: formData.lawOfficer,
-        alternateLawOfficer: formData.alternateLawOfficer,
-        party: 'N/A',
-        caseType: 'Civil',
-        priority: 'Medium',
-        amount: 'N/A',
-        judge: 'N/A',
-        assignedTo: 'N/A',
-        hearings: 0,
-        date: new Date().toISOString().split('T')[0],
-        // ✅ NEW BADGE TRACKING FIELDS - Professional
-        createdAt: now,
-        isNew: true,
-        viewedAt: null,
-      };
-
-      console.log('📤 Submitting new case:', submitData);
+      formDataToSend.append('writtenStatements', JSON.stringify(statementsData));
       
-      const result = await onAdd(submitData);
+      // ✅ Add attachment names as text fields
+      formDataToSend.append('copyOfSummon', formData.copyOfSummonName || '');
+      formDataToSend.append('copyOfPlaint', formData.copyOfPlaintName || '');
+      formDataToSend.append('relevantDepartmentalRecord', formData.relevantDepartmentalRecordName || '');
+      
+      formDataToSend.append('attachments', JSON.stringify({
+        copyOfSummon: formData.copyOfSummonName || '',
+        copyOfPlaint: formData.copyOfPlaintName || '',
+        relevantDepartmentalRecord: formData.relevantDepartmentalRecordName || '',
+      }));
+      
+      // ✅ Add the actual files
+      if (formData.copyOfSummon) {
+        formDataToSend.append('summonFile', formData.copyOfSummon);
+      }
+      if (formData.copyOfPlaint) {
+        formDataToSend.append('plaintFile', formData.copyOfPlaint);
+      }
+      if (formData.relevantDepartmentalRecord) {
+        formDataToSend.append('departmentalFile', formData.relevantDepartmentalRecord);
+      }
+      
+      // ✅ Add written statement files
+      formData.writtenStatements.forEach((s, index) => {
+        if (s.file) {
+          formDataToSend.append(`statementFile_${index}`, s.file);
+        }
+      });
+
+      console.log('📤 ===== SENDING FORM DATA =====');
+      console.log('📤 copyOfSummon:', formData.copyOfSummonName);
+      console.log('📤 copyOfPlaint:', formData.copyOfPlaintName);
+      console.log('📤 relevantDepartmentalRecord:', formData.relevantDepartmentalRecordName);
+      console.log('📤 hasSummonFile:', !!formData.copyOfSummon);
+      console.log('📤 hasPlaintFile:', !!formData.copyOfPlaint);
+      console.log('📤 hasDepartmentalFile:', !!formData.relevantDepartmentalRecord);
+      console.log('📤 ============================');
+      
+      // ✅ Send as FormData
+      const result = await onAdd(formDataToSend);
       console.log('📦 Add result:', result);
       
-      if (result.success) {
+      if (result && result.success) {
         toast.success('Case added successfully!');
         resetForm();
         onClose();
+        // ✅ Refresh cases after successful addition
+        if (window.__handleRefresh) {
+          setTimeout(() => window.__handleRefresh(), 300);
+        }
       } else {
-        toast.error(result.error || 'Failed to add case');
+        toast.error(result?.error || 'Failed to add case');
       }
     } catch (error) {
       console.error('❌ Add case error:', error);
@@ -639,7 +660,6 @@ const AddCaseModal = ({ isOpen, onClose, onAdd }) => {
         cellNumber: '',
       },
     });
-    setSelectedFiles([]);
     setShowStatementEditor(false);
     setEditingStatementId(null);
     setStatementTitle('');
@@ -653,7 +673,7 @@ const AddCaseModal = ({ isOpen, onClose, onAdd }) => {
     }
   };
 
-  // ✅ CRITICAL: This must be here - prevents rendering when closed
+  // ✅ CRITICAL: Prevents rendering when closed
   if (!isOpen) return null;
 
   // ===== DROPDOWN OPTIONS =====
@@ -741,26 +761,6 @@ const AddCaseModal = ({ isOpen, onClose, onAdd }) => {
     'Appellant(s)',
     'Respondent(s)',
     'Petitioner(s)'
-  ];
-
-  const plaintiffOptions = [
-    'Zubaida Bibi',
-    'Smith',
-    'Williams',
-    'Ali',
-    'Ahmed',
-    'Fatima',
-    'Muhammad',
-    'Khan'
-  ];
-
-  const defendantOptions = [
-    'Province of Punjab',
-    'Government',
-    'State',
-    'Corporation',
-    'Company',
-    'Federation'
   ];
 
   return (
@@ -904,7 +904,7 @@ const AddCaseModal = ({ isOpen, onClose, onAdd }) => {
                 />
               </div>
 
-              {/* ===== COPY OF SUMMON/NOTICES/REQUEST TO DEFEND ===== */}
+              {/* ===== COPY OF SUMMON ===== */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Copy of summon/Notices/Request to defend
@@ -930,7 +930,7 @@ const AddCaseModal = ({ isOpen, onClose, onAdd }) => {
                 </div>
               </div>
 
-              {/* ===== COPY OF PLAINT / PETITION ===== */}
+              {/* ===== COPY OF PLAINT ===== */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Copy of plaint / petition
@@ -1199,7 +1199,7 @@ const AddCaseModal = ({ isOpen, onClose, onAdd }) => {
                 )}
               </div>
 
-              {/* ===== LAW OFFICER / DEPARTMENTAL REPRESENTATIVE ===== */}
+              {/* ===== LAW OFFICER ===== */}
               <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
                 <h3 className="text-sm font-semibold text-[#0F4C75] mb-3 flex items-center gap-2">
                   <FaUser className="text-sm" />

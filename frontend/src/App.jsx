@@ -1,7 +1,9 @@
-// src/App.jsx - COMPLETE WORKING VERSION WITH PROFESSIONAL NEW BADGE
+// src/App.jsx - COMPLETE WORKING VERSION WITH NOTIFICATIONS
+import './styles/responsive.css';
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster, toast } from 'react-hot-toast';
+import  NotificationProvider    from './contexts/NotificationContext';
 
 // ============================================
 // HOOKS - ALL NAMED IMPORTS
@@ -1126,9 +1128,9 @@ const DashboardContent = () => {
   // ============================================
   const NEW_BADGE_CONFIG = {
     enabled: true,
-    daysToShow: 7,          // Show NEW badge for 7 days
-    showUntilViewed: true,   // Hide once case is viewed
-    pulseAnimation: true,    // Animate the badge
+    daysToShow: 7,
+    showUntilViewed: true,
+    pulseAnimation: true,
   };
 
   // ============================================
@@ -1137,12 +1139,10 @@ const DashboardContent = () => {
   const isNewCase = (caseItem) => {
     if (!caseItem || !NEW_BADGE_CONFIG.enabled) return false;
     
-    // If showUntilViewed is true and case has been viewed
     if (NEW_BADGE_CONFIG.showUntilViewed && caseItem.viewedAt) {
       return false;
     }
     
-    // Check by createdAt timestamp
     if (caseItem.createdAt) {
       const createdDate = new Date(caseItem.createdAt);
       const now = new Date();
@@ -1150,7 +1150,6 @@ const DashboardContent = () => {
       return diffDays < NEW_BADGE_CONFIG.daysToShow;
     }
     
-    // Fallback: check isNew flag
     return caseItem.isNew === true;
   };
 
@@ -1162,7 +1161,6 @@ const DashboardContent = () => {
     
     const caseId = caseItem.id || caseItem._id;
     
-    // Only mark if it's new
     if (isNewCase(caseItem)) {
       try {
         await api.patch(`/cases/${caseId}`, { 
@@ -1187,7 +1185,7 @@ const DashboardContent = () => {
   };
 
   // ============================================
-  // AUTO DATE FILTER - Triggers on change
+  // AUTO DATE FILTER
   // ============================================
   const handleDateChange = (e) => {
     const value = e.target.value;
@@ -1200,7 +1198,7 @@ const DashboardContent = () => {
   };
 
   // ============================================
-  // DEPARTMENT FILTER - Triggers on change
+  // DEPARTMENT FILTER
   // ============================================
   const handleDepartmentChange = (e) => {
     const value = e.target.value;
@@ -1213,7 +1211,7 @@ const DashboardContent = () => {
   };
 
   // ============================================
-  // STATUS FILTER - Triggers on change
+  // STATUS FILTER
   // ============================================
   const handleStatusChange = (e) => {
     const value = e.target.value;
@@ -1727,7 +1725,7 @@ const DashboardContent = () => {
   }, [cases]);
 
   // ============================================
-  // FILTERED CASES WITH DATE + DEPARTMENT + STATUS + SEARCH
+  // FILTERED CASES
   // ============================================
   const filteredCases = useMemo(() => {
     let filtered = cases;
@@ -2003,7 +2001,6 @@ const DashboardContent = () => {
       return;
     }
     
-    // ✅ Mark case as viewed when opened
     markCaseAsViewed(caseItem);
     
     const caseId = caseItem._id || caseItem.id;
@@ -2815,19 +2812,7 @@ const DashboardContent = () => {
   // ============================================
   return (
     <>
-      <Toaster 
-        position="top-right"
-        toastOptions={{
-          duration: 4000,
-          style: {
-            background: '#FFFFFF',
-            color: '#1B262C',
-            border: '1px solid #BBE1FA',
-            borderRadius: '12px',
-            boxShadow: '0 8px 32px rgba(15, 76, 117, 0.12)',
-          },
-        }}
-      />
+      {/* ✅ REMOVED DUPLICATE TOASTER - Now only in App component */}
       
       <div className="min-h-screen bg-gradient-to-br from-[#F0F4F8] via-[#F0F4F8] to-[#BBE1FA]/20 flex flex-col">
         <div className="fixed top-0 left-0 right-0 h-1 z-50 bg-gradient-to-r from-[#1B262C] via-[#0F4C75] to-[#3282B8]"></div>
@@ -3061,39 +3046,68 @@ const DashboardContent = () => {
 };
 
 // ============================================
-// MAIN APP WITH ROUTES
+// MAIN APP WITH ROUTES - FIXED WITH NOTIFICATION PROVIDER
 // ============================================
 function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
-      <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/auth/callback" element={<AuthCallback />} />
+    <NotificationProvider>
+      {/* ✅ Toaster at the top level for all notifications */}
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#FFFFFF',
+            color: '#1B262C',
+            border: '1px solid #BBE1FA',
+            borderRadius: '12px',
+            boxShadow: '0 8px 32px rgba(15, 76, 117, 0.12)',
+          },
+          success: {
+            icon: '✅',
+            style: {
+              border: '1px solid #22C55E',
+            },
+          },
+          error: {
+            icon: '❌',
+            style: {
+              border: '1px solid #EF4444',
+            },
+          },
+        }}
+      />
       
-      <Route path="/" element={
-        <ProtectedRoute>
-          <DashboardContent />
-        </ProtectedRoute>
-      } />
-      <Route path="/dashboard" element={
-        <ProtectedRoute>
-          <DashboardContent />
-        </ProtectedRoute>
-      } />
-      <Route path="/profile" element={
-        <ProtectedRoute>
-          <DashboardContent />
-        </ProtectedRoute>
-      } />
-      <Route path="/settings" element={
-        <ProtectedRoute>
-          <DashboardContent />
-        </ProtectedRoute>
-      } />
-      
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
-    </Routes>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+        
+        <Route path="/" element={
+          <ProtectedRoute>
+            <DashboardContent />
+          </ProtectedRoute>
+        } />
+        <Route path="/dashboard" element={
+          <ProtectedRoute>
+            <DashboardContent />
+          </ProtectedRoute>
+        } />
+        <Route path="/profile" element={
+          <ProtectedRoute>
+            <DashboardContent />
+          </ProtectedRoute>
+        } />
+        <Route path="/settings" element={
+          <ProtectedRoute>
+            <DashboardContent />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </NotificationProvider>
   );
 }
 

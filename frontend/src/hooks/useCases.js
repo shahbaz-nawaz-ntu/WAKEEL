@@ -1,8 +1,7 @@
-// src/hooks/useCases.js
+// src/hooks/useCases.js - Complete updated version with file URL handling
+
 import { useState, useCallback, useEffect } from 'react';
 
-// ✅ FIX: Use relative URL for development with proxy
-// or use environment variable for production
 const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 export const useCases = () => {
@@ -15,9 +14,7 @@ export const useCases = () => {
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
     console.log('🔑 Token:', token ? 'Present' : 'Missing');
     
-    // ✅ FIX: Return proper headers object for fetch
     const headers = {
-      'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
     
@@ -37,7 +34,6 @@ export const useCases = () => {
       const url = `${API_URL}/cases${queryString ? `?${queryString}` : ''}`;
       console.log('📡 Fetching cases from:', url);
       
-      // ✅ FIX: Add mode: 'cors' and credentials
       const response = await fetch(url, {
         method: 'GET',
         ...getAuthHeader(),
@@ -58,7 +54,11 @@ export const useCases = () => {
         console.log('✅ Cases loaded:', data.data.length, 'cases');
         const formattedCases = data.data.map(c => ({
           ...c,
-          id: c.id || c._id
+          id: c.id || c._id,
+          // ✅ Ensure file URLs are properly set
+          copyOfSummonUrl: c.copyOfSummonUrl || (c.copyOfSummon ? `/uploads/${c.copyOfSummon}` : null),
+          copyOfPlaintUrl: c.copyOfPlaintUrl || (c.copyOfPlaint ? `/uploads/${c.copyOfPlaint}` : null),
+          relevantDepartmentalRecordUrl: c.relevantDepartmentalRecordUrl || (c.relevantDepartmentalRecord ? `/uploads/${c.relevantDepartmentalRecord}` : null),
         }));
         setCases(formattedCases);
         return { success: true, data: formattedCases };
@@ -70,28 +70,6 @@ export const useCases = () => {
       const errorMsg = err.message || 'Failed to fetch cases';
       setError(errorMsg);
       
-      // Try test route as fallback
-      try {
-        console.log('🔄 Trying test route...');
-        const testResponse = await fetch(`${API_URL}/test/cases`, {
-          method: 'GET',
-          mode: 'cors',
-          credentials: 'include',
-        });
-        const testData = await testResponse.json();
-        if (testData.success && testData.data) {
-          console.log('✅ Test route loaded:', testData.data.length, 'cases');
-          const formattedCases = testData.data.map(c => ({
-            ...c,
-            id: c.id || c._id
-          }));
-          setCases(formattedCases);
-          return { success: true, data: formattedCases };
-        }
-      } catch (testErr) {
-        console.error('❌ Test route also failed:', testErr);
-      }
-      
       // Use dummy data as last resort
       const dummyCases = getDummyCases();
       setCases(dummyCases);
@@ -101,7 +79,7 @@ export const useCases = () => {
     }
   }, []);
 
-  // ✅ NEW: Fetch a single case by ID
+  // Fetch a single case by ID
   const fetchCaseById = useCallback(async (id) => {
     setLoading(true);
     setError(null);
@@ -128,7 +106,11 @@ export const useCases = () => {
       if (data.success && data.data) {
         const formattedCase = {
           ...data.data,
-          id: data.data.id || data.data._id
+          id: data.data.id || data.data._id,
+          // ✅ Ensure file URLs are properly set
+          copyOfSummonUrl: data.data.copyOfSummonUrl || (data.data.copyOfSummon ? `/uploads/${data.data.copyOfSummon}` : null),
+          copyOfPlaintUrl: data.data.copyOfPlaintUrl || (data.data.copyOfPlaint ? `/uploads/${data.data.copyOfPlaint}` : null),
+          relevantDepartmentalRecordUrl: data.data.relevantDepartmentalRecordUrl || (data.data.relevantDepartmentalRecord ? `/uploads/${data.data.relevantDepartmentalRecord}` : null),
         };
         return { success: true, data: formattedCase };
       }
@@ -143,34 +125,58 @@ export const useCases = () => {
     }
   }, []);
 
-  // Auto-fetch on mount
-  useEffect(() => {
-    console.log('🔄 useCases mounted - fetching cases...');
-    fetchCases();
-  }, [fetchCases]);
-
-  // ✅ FIXED: Add case
+  // Add case - Supports both JSON and FormData
   const addCase = useCallback(async (caseData) => {
     setLoading(true);
     setError(null);
     try {
       console.log('📤 Adding new case:', caseData);
       
+      const isFormData = caseData instanceof FormData;
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+      
+      const headers = {
+        'Accept': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      if (!isFormData) {
+        headers['Content-Type'] = 'application/json';
+      }
+      
+      if (isFormData) {
+        console.log('📤 Sending FormData with files');
+        for (let pair of caseData.entries()) {
+          console.log(`📤 ${pair[0]}:`, pair[1] instanceof File ? `File: ${pair[1].name}` : pair[1]);
+        }
+      } else {
+        console.log('📤 Sending JSON data');
+      }
+      
       const response = await fetch(`${API_URL}/cases`, {
         method: 'POST',
-        ...getAuthHeader(),
-        body: JSON.stringify(caseData),
+        headers: headers,
+        body: isFormData ? caseData : JSON.stringify(caseData),
         mode: 'cors',
         credentials: 'include',
       });
 
+      console.log('📡 Response status:', response.status);
+      
       const result = await response.json();
       console.log('📦 Add case response:', result);
 
       if (result.success && result.data) {
         const newCase = {
           ...result.data,
-          id: result.data.id || result.data._id
+          id: result.data.id || result.data._id,
+          // ✅ Ensure file URLs are properly set from response
+          copyOfSummonUrl: result.data.copyOfSummonUrl || (result.data.copyOfSummon ? `/uploads/${result.data.copyOfSummon}` : null),
+          copyOfPlaintUrl: result.data.copyOfPlaintUrl || (result.data.copyOfPlaint ? `/uploads/${result.data.copyOfPlaint}` : null),
+          relevantDepartmentalRecordUrl: result.data.relevantDepartmentalRecordUrl || (result.data.relevantDepartmentalRecord ? `/uploads/${result.data.relevantDepartmentalRecord}` : null),
         };
         
         setCases(prev => [newCase, ...prev]);
@@ -190,28 +196,42 @@ export const useCases = () => {
     }
   }, []);
 
-  // ✅ FIXED: Update case
+  // ✅ FIXED: Update case - Complete with file URL handling
   const updateCase = useCallback(async (id, updatedData) => {
     setLoading(true);
     setError(null);
     try {
       console.log(`📤 Updating case: ${id}`);
-      console.log('📤 Update data:', updatedData);
       
-      // Clean up the data - remove any undefined values
-      const cleanData = {};
-      Object.keys(updatedData).forEach(key => {
-        if (updatedData[key] !== undefined && updatedData[key] !== null) {
-          cleanData[key] = updatedData[key];
+      const isFormData = updatedData instanceof FormData;
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+      
+      const headers = {
+        'Accept': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      if (!isFormData) {
+        headers['Content-Type'] = 'application/json';
+      }
+      
+      // ✅ Log FormData contents for debugging
+      if (isFormData) {
+        console.log('📤 Sending FormData with files for update');
+        for (let pair of updatedData.entries()) {
+          console.log(`📤 ${pair[0]}:`, pair[1] instanceof File ? `File: ${pair[1].name} (${pair[1].size} bytes)` : pair[1]);
         }
-      });
-      
-      console.log('📤 Clean data:', cleanData);
+      } else {
+        console.log('📤 Sending JSON update data:', updatedData);
+      }
       
       const response = await fetch(`${API_URL}/cases/${id}`, {
         method: 'PUT',
-        ...getAuthHeader(),
-        body: JSON.stringify(cleanData),
+        headers: headers,
+        body: isFormData ? updatedData : JSON.stringify(updatedData),
         mode: 'cors',
         credentials: 'include',
       });
@@ -222,10 +242,29 @@ export const useCases = () => {
       console.log('📦 Update response:', result);
 
       if (result.success && result.data) {
+        // ✅ Extract file data from response
+        const responseData = result.data;
+        
+        // ✅ Build the updated case with proper file URLs
         const updatedCase = {
-          ...result.data,
-          id: result.data.id || result.data._id
+          ...responseData,
+          id: responseData.id || responseData._id,
+          // ✅ Ensure file URLs are properly set from response
+          copyOfSummonUrl: responseData.copyOfSummonUrl || (responseData.copyOfSummon ? `/uploads/${responseData.copyOfSummon}` : null),
+          copyOfPlaintUrl: responseData.copyOfPlaintUrl || (responseData.copyOfPlaint ? `/uploads/${responseData.copyOfPlaint}` : null),
+          relevantDepartmentalRecordUrl: responseData.relevantDepartmentalRecordUrl || (responseData.relevantDepartmentalRecord ? `/uploads/${responseData.relevantDepartmentalRecord}` : null),
         };
+        
+        // ✅ Log the file URLs from the response
+        console.log('📎 Updated case file data:', {
+          copyOfSummon: updatedCase.copyOfSummon,
+          copyOfSummonUrl: updatedCase.copyOfSummonUrl,
+          copyOfPlaint: updatedCase.copyOfPlaint,
+          copyOfPlaintUrl: updatedCase.copyOfPlaintUrl,
+          relevantDepartmentalRecord: updatedCase.relevantDepartmentalRecord,
+          relevantDepartmentalRecordUrl: updatedCase.relevantDepartmentalRecordUrl,
+          attachments: updatedCase.attachments,
+        });
         
         // Update the cases array
         setCases(prev => {
@@ -245,6 +284,84 @@ export const useCases = () => {
     } catch (err) {
       const errorMsg = err.message || 'Failed to update case';
       console.error('❌ Update error:', err);
+      setError(errorMsg);
+      return { success: false, error: errorMsg };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // ✅ FIXED: Update case status - COMPLETE FIX
+  const updateCaseStatus = useCallback(async (id, status) => {
+    setLoading(true);
+    setError(null);
+    try {
+      console.log(`📤 Updating status for case: ${id} → ${status}`);
+      
+      const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+      
+      const headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch(`${API_URL}/cases/${id}/status`, {
+        method: 'PATCH',
+        headers: headers,
+        body: JSON.stringify({ status }),
+        mode: 'cors',
+        credentials: 'include',
+      });
+
+      console.log('📡 Response status:', response.status);
+      
+      const result = await response.json();
+      console.log('📦 Status update response:', result);
+
+      if (result.success && result.data) {
+        const updatedCase = {
+          ...result.data,
+          id: result.data.id || result.data._id,
+          // ✅ Ensure file URLs are preserved
+          copyOfSummonUrl: result.data.copyOfSummonUrl || (result.data.copyOfSummon ? `/uploads/${result.data.copyOfSummon}` : null),
+          copyOfPlaintUrl: result.data.copyOfPlaintUrl || (result.data.copyOfPlaint ? `/uploads/${result.data.copyOfPlaint}` : null),
+          relevantDepartmentalRecordUrl: result.data.relevantDepartmentalRecordUrl || (result.data.relevantDepartmentalRecord ? `/uploads/${result.data.relevantDepartmentalRecord}` : null),
+        };
+        
+        // ✅ Update the cases array
+        setCases(prev => {
+          const newCases = prev.map(c => {
+            if (c.id === id || c._id === id) {
+              return { ...c, ...updatedCase, status: status };
+            }
+            return c;
+          });
+          console.log('📊 Updated cases array after status change:', newCases.length, 'cases');
+          return newCases;
+        });
+        
+        console.log('✅ Status updated for case:', id, '→', status);
+        
+        // ✅ Update window reference
+        if (window.__selectedCase && (window.__selectedCase.id === id || window.__selectedCase._id === id)) {
+          window.__selectedCase = { ...window.__selectedCase, ...updatedCase, status: status };
+        }
+        
+        // ✅ Trigger refresh
+        if (window.__handleRefresh) {
+          setTimeout(() => window.__handleRefresh(), 100);
+        }
+        
+        return { success: true, data: updatedCase };
+      }
+      return { success: false, error: result.error || 'Failed to update status' };
+    } catch (err) {
+      const errorMsg = err.message || 'Failed to update status';
+      console.error('❌ Status update error:', err);
       setError(errorMsg);
       return { success: false, error: errorMsg };
     } finally {
@@ -285,47 +402,6 @@ export const useCases = () => {
     }
   }, []);
 
-  // Update case status
-  const updateCaseStatus = useCallback(async (id, status) => {
-    setLoading(true);
-    setError(null);
-    try {
-      console.log(`📤 Updating status for case: ${id} → ${status}`);
-      
-      const response = await fetch(`${API_URL}/cases/${id}/status`, {
-        method: 'PATCH',
-        ...getAuthHeader(),
-        body: JSON.stringify({ status }),
-        mode: 'cors',
-        credentials: 'include',
-      });
-
-      const result = await response.json();
-      console.log('📦 Status update response:', result);
-
-      if (result.success && result.data) {
-        const updatedCase = {
-          ...result.data,
-          id: result.data.id || result.data._id
-        };
-        
-        setCases(prev => prev.map(c => 
-          (c.id === id || c._id === id) ? updatedCase : c
-        ));
-        console.log('✅ Status updated for case:', id, '→', status);
-        return { success: true, data: updatedCase };
-      }
-      return { success: false, error: result.error || 'Failed to update status' };
-    } catch (err) {
-      const errorMsg = err.message || 'Failed to update status';
-      console.error('❌ Status update error:', err);
-      setError(errorMsg);
-      return { success: false, error: errorMsg };
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   // Get case statistics
   const getStats = useCallback(() => {
     const total = cases.length;
@@ -334,6 +410,12 @@ export const useCases = () => {
     const closed = cases.filter(c => c.status === 'closed').length;
     return { total, active, pending, closed };
   }, [cases]);
+
+  // Auto-fetch on mount
+  useEffect(() => {
+    console.log('🔄 useCases mounted - fetching cases...');
+    fetchCases();
+  }, [fetchCases]);
 
   // Dummy data
   const getDummyCases = () => {
@@ -396,7 +478,7 @@ export const useCases = () => {
     loading,
     error,
     fetchCases,
-    fetchCaseById, // ✅ NEW: Added this
+    fetchCaseById,
     addCase,
     updateCase,
     deleteCase,

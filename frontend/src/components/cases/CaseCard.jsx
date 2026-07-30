@@ -21,7 +21,9 @@ import {
   FaLandmark,
   FaClock,
   FaIdCard,
-  FaMapMarkerAlt
+  FaMapMarkerAlt,
+  FaDownload,
+  FaPrint
 } from 'react-icons/fa';
 import { GiScales } from 'react-icons/gi';
 import CaseDetailModal from '../modals/CaseDetailModal';
@@ -213,7 +215,7 @@ const CaseCard = ({
   isNew = false,
   onRefresh,
   onPartyUpdate,
-  onDepartmentClick // ✅ New prop for department filter
+  onDepartmentClick
 }) => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -231,13 +233,6 @@ const CaseCard = ({
     return configs[status?.toLowerCase()] || configs.pending;
   };
 
-  const getInitials = (name) => {
-    if (!name || name === 'N/A' || name === 'NA') return null;
-    const parts = name.split(' ');
-    if (parts.length >= 2) return parts[0][0] + parts[1][0];
-    return name.substring(0, 2).toUpperCase();
-  };
-
   const formatDate = (date) => {
     if (!date) return '—';
     try {
@@ -251,43 +246,59 @@ const CaseCard = ({
     }
   };
 
-  // ===== DATA EXTRACTION =====
-  
-  // ✅ Get full case title (Plaintiff VS Defendant) - SIMPLE BLACK
+  // ===== FIXED: Get full case title with VS =====
   const getFullCaseTitle = () => {
+    const plaintiff = caseItem.plaintiff || '';
+    const defendant = caseItem.defendant || '';
+    const caseTitle = caseItem.caseTitle || caseItem.title || '';
+    
+    // If both plaintiff and defendant exist, show "Plaintiff VS Defendant"
+    if (plaintiff && defendant) {
+      return `${plaintiff} VS ${defendant}`;
+    }
+    
+    // If only plaintiff exists
+    if (plaintiff) {
+      // If there's also a case title, combine them
+      if (caseTitle && caseTitle !== 'N/A' && caseTitle !== '') {
+        return `${plaintiff} - ${caseTitle}`;
+      }
+      return plaintiff;
+    }
+    
+    // If only defendant exists
+    if (defendant) {
+      if (caseTitle && caseTitle !== 'N/A' && caseTitle !== '') {
+        return `${defendant} - ${caseTitle}`;
+      }
+      return defendant;
+    }
+    
+    // Fallback to case title
+    if (caseTitle && caseTitle !== 'N/A' && caseTitle !== '') {
+      return caseTitle;
+    }
+    
+    return 'Untitled Case';
+  };
+
+  // ===== FIXED: Get VS display for the badge area =====
+  const getVSDisplay = () => {
     const plaintiff = caseItem.plaintiff || '';
     const defendant = caseItem.defendant || '';
     
     if (plaintiff && defendant) {
       return `${plaintiff} VS ${defendant}`;
     }
-    if (plaintiff) return plaintiff;
-    if (defendant) return defendant;
-    
-    // Fallback to caseTitle
-    if (caseItem.caseTitle && caseItem.caseTitle !== 'N/A' && caseItem.caseTitle !== '') {
-      let title = caseItem.caseTitle;
-      title = title.replace(/^#\d+\s*/, '');
-      title = title.replace(/^\d+-\s*/, '');
-      title = title.replace(/^Case\s*#\d+\s*/i, '');
-      return title.trim();
-    }
-    if (caseItem.title && caseItem.title !== 'N/A' && caseItem.title !== '') {
-      let title = caseItem.title;
-      title = title.replace(/^#\d+\s*/, '');
-      title = title.replace(/^\d+-\s*/, '');
-      title = title.replace(/^Case\s*#\d+\s*/i, '');
-      return title.trim();
-    }
-    return 'Untitled Case';
+    return null;
   };
 
-  // Case Number - displayed separately as badge
+  // Case Number
   const getCaseNumber = () => {
     return caseItem.caseNumber || caseItem._id || caseItem.id || '';
   };
 
-  // ✅ Department - from case data (replaces Case Type)
+  // Department
   const getDepartment = () => {
     return caseItem.department || 
            caseItem.clientDepartment || 
@@ -295,7 +306,7 @@ const CaseCard = ({
            '';
   };
 
-  // ✅ Nature of Case
+  // Nature of Case
   const getNatureOfCase = () => {
     return caseItem.natureOfCase || caseItem.caseNature?.trial || '';
   };
@@ -318,37 +329,6 @@ const CaseCard = ({
   // Next Hearing Date
   const getNextHearing = () => {
     return caseItem.nextDateOfHearing || caseItem.nextDate || caseItem.courtDetails?.nextDate || '';
-  };
-
-  // Party Name (for display)
-  const getPartyDisplay = () => {
-    const name = caseItem.plaintiff || caseItem.defendant || caseItem.partyName || caseItem.party;
-    if (!name || name === 'N/A' || name === 'NA') return null;
-    return name;
-  };
-
-  // Party Type
-  const getPartyType = () => {
-    if (caseItem.plaintiff && caseItem.defendant) {
-      return `${caseItem.plaintiff} vs ${caseItem.defendant}`;
-    }
-    if (caseItem.partyType) return caseItem.partyType;
-    return '';
-  };
-
-  // Party Phone
-  const getPartyPhone = () => {
-    return caseItem.partyPhone || caseItem.phone || '';
-  };
-
-  // Party Email
-  const getPartyEmail = () => {
-    return caseItem.partyEmail || caseItem.email || '';
-  };
-
-  // Has Party Data
-  const hasPartyData = () => {
-    return getPartyDisplay() !== null || getPartyPhone() || getPartyEmail();
   };
 
   // Attachments
@@ -396,15 +376,6 @@ const CaseCard = ({
     return 'text-gray-400';
   };
 
-  // Check if case has any meaningful data
-  const hasNoData = () => {
-    return !getFullCaseTitle() && 
-           !getCaseNumber() && 
-           !getPartyDisplay() &&
-           !getCourtName() &&
-           !getNextHearing();
-  };
-
   // Handlers
   const handleDeleteClick = () => setShowDeleteConfirm(true);
   const handleConfirmDelete = () => {
@@ -427,7 +398,6 @@ const CaseCard = ({
     setTimeout(() => handleRefresh(), 300);
   };
 
-  // ✅ Handle department click - filter by department
   const handleDepartmentClick = (e) => {
     e.stopPropagation();
     const dept = getDepartment();
@@ -438,19 +408,10 @@ const CaseCard = ({
 
   const statusConfig = getStatusConfig(caseItem.status);
   const fullCaseTitle = getFullCaseTitle();
+  const vsDisplay = getVSDisplay();
   const department = getDepartment();
   const natureOfCase = getNatureOfCase();
-
-  // If no data, show empty state
-  if (hasNoData()) {
-    return (
-      <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
-        <FaFileAlt className="text-gray-300 text-3xl mx-auto mb-2" />
-        <p className="text-sm text-gray-500">No case data available</p>
-        <p className="text-xs text-gray-400 mt-1">This case has no information</p>
-      </div>
-    );
-  }
+  const caseNumber = getCaseNumber();
 
   return (
     <>
@@ -467,21 +428,28 @@ const CaseCard = ({
         <div className="h-1 bg-gradient-to-r from-[#1B262C] via-[#0F4C75] to-[#3282B8] flex-shrink-0"></div>
 
         <div className="p-4 flex-1 flex flex-col">
-          {/* ===== HEADER: Case Title (Simple Black) ===== */}
+          {/* ===== HEADER: Case Title with VS ===== */}
           <div className="flex items-start justify-between mb-1 flex-shrink-0">
             <div className="flex-1 min-w-0">
+              {/* ✅ Main Title - Shows Plaintiff VS Defendant */}
               <h3 className="font-bold text-[#1B262C] text-base truncate">
                 {fullCaseTitle}
               </h3>
               
-              {/* ===== BADGES - Civil removed, Department added ===== */}
+              {/* ✅ VS Display - Second line if needed */}
+              {vsDisplay && (
+                <p className="text-[10px] text-gray-400 truncate">
+                  {vsDisplay}
+                </p>
+              )}
+              
+              {/* ===== BADGES ===== */}
               <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                {getCaseNumber() && (
+                {caseNumber && (
                   <span className="text-[8px] text-gray-500 font-mono bg-gray-50 px-1.5 py-0.5 rounded border border-gray-200">
-                    #{getCaseNumber()}
+                    #{caseNumber}
                   </span>
                 )}
-                {/* ✅ Department Badge - Clickable to filter (replaces Civil) */}
                 {department && (
                   <button
                     onClick={handleDepartmentClick}

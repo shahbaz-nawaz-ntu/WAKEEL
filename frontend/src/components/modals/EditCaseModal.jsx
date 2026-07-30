@@ -63,7 +63,7 @@ const Combobox = ({ options, value, onChange, placeholder, label, required, clas
         <input
           ref={inputRef}
           type="text"
-          value={value}
+          value={value || ''}
           onChange={handleInputChange}
           onFocus={() => setIsOpen(true)}
           placeholder={placeholder}
@@ -165,51 +165,119 @@ const EditCaseModal = ({ isOpen, case: caseData, onClose, onUpdate, onRefresh })
     return <FaFile className="text-gray-500" />;
   };
 
-  // ✅ Load case data when modal opens
+  // ✅ LOAD CASE DATA WHEN MODAL OPENS - COMPLETE FIX
   useEffect(() => {
-    if (caseData) {
+    if (caseData && isOpen) {
       console.log('📝 EditModal - Loading case data:', caseData);
+      console.log('📝 Case ID:', caseData._id || caseData.id);
+      console.log('📝 All keys:', Object.keys(caseData));
+      
+      // Extract data from various possible locations
+      const getNestedValue = (obj, ...keys) => {
+        for (const key of keys) {
+          if (obj && obj[key] !== undefined && obj[key] !== null) {
+            return obj[key];
+          }
+        }
+        return '';
+      };
+      
+      // Get attachments
+      const attachments = caseData.attachments || {};
+      const documents = caseData.documents || {};
+      
+      // ✅ Get title with multiple fallbacks
+      const title = caseData.caseTitle || caseData.title || caseData.caseName || '';
+      
+      // ✅ Get court name with multiple fallbacks
+      const courtName = caseData.nameOfCourt || 
+                       caseData.courtName || 
+                       caseData.courtDetails?.courtName || 
+                       caseData.courtDetails?.name || 
+                       '';
+      
+      // ✅ Get nature of case with multiple fallbacks
+      const nature = caseData.natureOfCase || 
+                     caseData.caseNature?.trial || 
+                     caseData.caseNature?.type || 
+                     caseData.caseType || 
+                     '';
+      
+      // ✅ Get next hearing date with multiple fallbacks
+      const nextDate = caseData.nextDateOfHearing || 
+                       caseData.nextDate || 
+                       caseData.nexthearing || 
+                       caseData.courtDetails?.nextDate || 
+                       '';
+      
+      // ✅ Get attachments with multiple fallbacks
+      const summonName = caseData.copyOfSummon || 
+                         attachments.copyOfSummon || 
+                         documents.copyOfSummon || 
+                         '';
+      
+      const plaintName = caseData.copyOfPlaint || 
+                        attachments.copyOfPlaint || 
+                        documents.copyOfPlaint || 
+                        '';
+      
+      const deptRecordName = caseData.relevantDepartmentalRecord || 
+                            attachments.relevantDepartmentalRecord || 
+                            documents.relevantDepartmentalRecord || 
+                            '';
+      
+      // ✅ Get law officer data with fallbacks
+      const lawOfficer = caseData.lawOfficer || {};
+      const alternateLawOfficer = caseData.alternateLawOfficer || {};
+      
+      // ✅ Get written statements with fallback to empty array
+      const writtenStatements = caseData.writtenStatements || [];
       
       setFormData({
+        // Basic info - with proper fallbacks
         division: caseData.division || '',
         district: caseData.district || '',
         caseNumber: caseData.caseNumber || '',
-        titleOfCase: caseData.caseTitle || caseData.title || '',
+        titleOfCase: title || 'Untitled',
         plaintiff: caseData.plaintiff || '',
         defendant: caseData.defendant || '',
-        nameOfCourt: caseData.nameOfCourt || caseData.courtName || caseData.courtDetails?.courtName || '',
-        natureOfCase: caseData.natureOfCase || caseData.caseNature?.trial || '',
-        nextDateOfHearing: caseData.nextDateOfHearing || caseData.nextDate || caseData.courtDetails?.nextDate || '',
+        nameOfCourt: courtName || '',
+        natureOfCase: nature || '',
+        nextDateOfHearing: nextDate || '',
         
+        // Attachments
         copyOfSummon: null,
-        copyOfSummonName: caseData.copyOfSummon || caseData.attachments?.copyOfSummon || '',
+        copyOfSummonName: summonName || '',
         copyOfPlaint: null,
-        copyOfPlaintName: caseData.copyOfPlaint || caseData.attachments?.copyOfPlaint || '',
+        copyOfPlaintName: plaintName || '',
         relevantDepartmentalRecord: null,
-        relevantDepartmentalRecordName: caseData.relevantDepartmentalRecord || caseData.attachments?.relevantDepartmentalRecord || '',
+        relevantDepartmentalRecordName: deptRecordName || '',
         
-        writtenStatements: caseData.writtenStatements || [],
+        // Written Statements
+        writtenStatements: writtenStatements,
         
+        // Law Officer
         lawOfficer: {
-          type: caseData.lawOfficer?.type || 'Department Representative',
-          name: caseData.lawOfficer?.name || '',
-          designation: caseData.lawOfficer?.designation || '',
-          officeAddress: caseData.lawOfficer?.officeAddress || '',
-          officialNumber: caseData.lawOfficer?.officialNumber || '',
-          cellNumber: caseData.lawOfficer?.cellNumber || '',
+          type: lawOfficer.type || 'Department Representative',
+          name: lawOfficer.name || '',
+          designation: lawOfficer.designation || '',
+          officeAddress: lawOfficer.officeAddress || '',
+          officialNumber: lawOfficer.officialNumber || '',
+          cellNumber: lawOfficer.cellNumber || '',
         },
         
+        // Alternate Law Officer
         alternateLawOfficer: {
-          type: caseData.alternateLawOfficer?.type || 'Department Representative',
-          name: caseData.alternateLawOfficer?.name || '',
-          designation: caseData.alternateLawOfficer?.designation || '',
-          officeAddress: caseData.alternateLawOfficer?.officeAddress || '',
-          officialNumber: caseData.alternateLawOfficer?.officialNumber || '',
-          cellNumber: caseData.alternateLawOfficer?.cellNumber || '',
+          type: alternateLawOfficer.type || 'Department Representative',
+          name: alternateLawOfficer.name || '',
+          designation: alternateLawOfficer.designation || '',
+          officeAddress: alternateLawOfficer.officeAddress || '',
+          officialNumber: alternateLawOfficer.officialNumber || '',
+          cellNumber: alternateLawOfficer.cellNumber || '',
         },
       });
     }
-  }, [caseData]);
+  }, [caseData, isOpen]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -501,7 +569,7 @@ const EditCaseModal = ({ isOpen, case: caseData, onClose, onUpdate, onRefresh })
     }
   };
 
-  // ===== SUBMIT - FIXED: UPDATE EXISTING CASE =====
+  // ===== SUBMIT - FIXED: Supports both JSON and FormData =====
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -519,58 +587,125 @@ const EditCaseModal = ({ isOpen, case: caseData, onClose, onUpdate, onRefresh })
       console.log(`📤 Updating existing case: ${caseId}`);
       console.log('📤 Case data:', caseData);
       
-      const statementsData = formData.writtenStatements.map(s => ({
-        title: s.title,
-        content: s.content || '',
-        fileName: s.fileName || '',
-        fileSize: s.fileSize || 0,
-        createdAt: s.createdAt,
-      }));
+      // ✅ Check if there are any new files
+      const hasNewFiles = formData.copyOfSummon || 
+                          formData.copyOfPlaint || 
+                          formData.relevantDepartmentalRecord ||
+                          formData.writtenStatements.some(s => s.file);
 
-      // ✅ Build update data (ONLY update fields, NOT create new)
-      const updateData = {
-        division: formData.division,
-        district: formData.district,
-        caseNumber: formData.caseNumber,
-        status: 'active',
-        caseTitle: formData.titleOfCase,
-        title: formData.titleOfCase,
-        plaintiff: formData.plaintiff,
-        defendant: formData.defendant,
-        nameOfCourt: formData.nameOfCourt,
-        courtName: formData.nameOfCourt,
-        courtDetails: {
-          courtName: formData.nameOfCourt,
+      let updateData;
+      
+      if (hasNewFiles) {
+        // ✅ Use FormData for file uploads
+        const formDataToSend = new FormData();
+        
+        // Add all text fields
+        formDataToSend.append('division', formData.division);
+        formDataToSend.append('district', formData.district);
+        formDataToSend.append('caseNumber', formData.caseNumber);
+        formDataToSend.append('caseTitle', formData.titleOfCase);
+        formDataToSend.append('title', formData.titleOfCase);
+        formDataToSend.append('plaintiff', formData.plaintiff);
+        formDataToSend.append('defendant', formData.defendant);
+        formDataToSend.append('nameOfCourt', formData.nameOfCourt);
+        formDataToSend.append('natureOfCase', formData.natureOfCase);
+        formDataToSend.append('nextDateOfHearing', formData.nextDateOfHearing);
+        formDataToSend.append('status', 'active');
+        
+        // Add law officer data
+        formDataToSend.append('lawOfficer', JSON.stringify(formData.lawOfficer));
+        formDataToSend.append('alternateLawOfficer', JSON.stringify(formData.alternateLawOfficer));
+        
+        // Add written statements
+        const statementsData = formData.writtenStatements.map(s => ({
+          title: s.title,
+          content: s.content || '',
+          fileName: s.fileName || '',
+          fileSize: s.fileSize || 0,
+          createdAt: s.createdAt,
+        }));
+        formDataToSend.append('writtenStatements', JSON.stringify(statementsData));
+        
+        // Add attachment names
+        formDataToSend.append('copyOfSummon', formData.copyOfSummonName || '');
+        formDataToSend.append('copyOfPlaint', formData.copyOfPlaintName || '');
+        formDataToSend.append('relevantDepartmentalRecord', formData.relevantDepartmentalRecordName || '');
+        
+        // Add files if they exist
+        if (formData.copyOfSummon) {
+          formDataToSend.append('summonFile', formData.copyOfSummon);
+        }
+        if (formData.copyOfPlaint) {
+          formDataToSend.append('plaintFile', formData.copyOfPlaint);
+        }
+        if (formData.relevantDepartmentalRecord) {
+          formDataToSend.append('departmentalFile', formData.relevantDepartmentalRecord);
+        }
+        
+        // Add written statement files
+        formData.writtenStatements.forEach((s, index) => {
+          if (s.file) {
+            formDataToSend.append(`statementFile_${index}`, s.file);
+          }
+        });
+        
+        updateData = formDataToSend;
+        console.log('📤 Sending FormData with files');
+      } else {
+        // ✅ Use JSON for no files
+        const statementsData = formData.writtenStatements.map(s => ({
+          title: s.title,
+          content: s.content || '',
+          fileName: s.fileName || '',
+          fileSize: s.fileSize || 0,
+          createdAt: s.createdAt,
+        }));
+
+        updateData = {
+          division: formData.division,
           district: formData.district,
+          caseNumber: formData.caseNumber,
+          status: 'active',
+          caseTitle: formData.titleOfCase,
+          title: formData.titleOfCase,
+          plaintiff: formData.plaintiff,
+          defendant: formData.defendant,
+          nameOfCourt: formData.nameOfCourt,
+          courtName: formData.nameOfCourt,
+          courtDetails: {
+            courtName: formData.nameOfCourt,
+            district: formData.district,
+            nextDate: formData.nextDateOfHearing,
+          },
+          natureOfCase: formData.natureOfCase,
+          caseNature: {
+            trial: formData.natureOfCase,
+          },
+          nextDateOfHearing: formData.nextDateOfHearing,
           nextDate: formData.nextDateOfHearing,
-        },
-        natureOfCase: formData.natureOfCase,
-        caseNature: {
-          trial: formData.natureOfCase,
-        },
-        nextDateOfHearing: formData.nextDateOfHearing,
-        nextDate: formData.nextDateOfHearing,
-        nexthearing: formData.nextDateOfHearing,
-        copyOfSummon: formData.copyOfSummonName || '',
-        copyOfPlaint: formData.copyOfPlaintName || '',
-        relevantDepartmentalRecord: formData.relevantDepartmentalRecordName || '',
-        attachments: {
+          nexthearing: formData.nextDateOfHearing,
           copyOfSummon: formData.copyOfSummonName || '',
           copyOfPlaint: formData.copyOfPlaintName || '',
           relevantDepartmentalRecord: formData.relevantDepartmentalRecordName || '',
-        },
-        writtenStatements: statementsData,
-        lawOfficer: formData.lawOfficer,
-        alternateLawOfficer: formData.alternateLawOfficer,
-        party: 'N/A',
-        caseType: 'Civil',
-        priority: 'Medium',
-        amount: 'N/A',
-        judge: 'N/A',
-        assignedTo: 'N/A',
-        hearings: 0,
-        date: new Date().toISOString().split('T')[0],
-      };
+          attachments: {
+            copyOfSummon: formData.copyOfSummonName || '',
+            copyOfPlaint: formData.copyOfPlaintName || '',
+            relevantDepartmentalRecord: formData.relevantDepartmentalRecordName || '',
+          },
+          writtenStatements: statementsData,
+          lawOfficer: formData.lawOfficer,
+          alternateLawOfficer: formData.alternateLawOfficer,
+          party: formData.plaintiff && formData.defendant ? `${formData.plaintiff} VS ${formData.defendant}` : 'N/A',
+          caseType: 'Civil',
+          priority: 'Medium',
+          amount: 'N/A',
+          judge: 'N/A',
+          assignedTo: 'N/A',
+          hearings: 0,
+          date: new Date().toISOString().split('T')[0],
+        };
+        console.log('📤 Sending JSON update data');
+      }
 
       console.log('📤 Update data:', updateData);
       
@@ -1066,7 +1201,7 @@ const EditCaseModal = ({ isOpen, case: caseData, onClose, onUpdate, onRefresh })
                 {formData.writtenStatements.length > 0 && (
                   <div className="mt-3 space-y-2">
                     {formData.writtenStatements.map((statement) => (
-                      <div key={statement.id} className="bg-gray-50 px-4 py-3 rounded-lg border border-gray-200 hover:border-[#3282B8]/50 transition-colors">
+                      <div key={statement.id || statement._id || Math.random()} className="bg-gray-50 px-4 py-3 rounded-lg border border-gray-200 hover:border-[#3282B8]/50 transition-colors">
                         <div className="flex items-start justify-between">
                           <div className="flex items-start gap-3 flex-1 min-w-0">
                             {statement.file ? (
@@ -1085,7 +1220,7 @@ const EditCaseModal = ({ isOpen, case: caseData, onClose, onUpdate, onRefresh })
                                 <div className="flex-1 min-w-0">
                                   <p className="text-sm font-bold text-gray-800">{statement.title}</p>
                                   <p className="text-xs text-gray-400">
-                                    {statement.content.trim().split(/\s+/).filter(w => w).length} words • {statement.content.length} characters
+                                    {statement.content?.trim()?.split(/\s+/)?.filter(w => w)?.length || 0} words • {statement.content?.length || 0} characters
                                   </p>
                                 </div>
                               </>
@@ -1128,7 +1263,7 @@ const EditCaseModal = ({ isOpen, case: caseData, onClose, onUpdate, onRefresh })
                             )}
                             <button
                               type="button"
-                              onClick={() => handleRemoveStatement(statement.id)}
+                              onClick={() => handleRemoveStatement(statement.id || statement._id)}
                               className="text-red-500 hover:text-red-700 transition-colors p-1 hover:bg-red-50 rounded-lg"
                               title="Remove"
                             >

@@ -1,51 +1,54 @@
 // src/hooks/useClients.js
 import { useState, useCallback, useEffect } from 'react';
-
-// ✅ FIX: Use relative URL for development with proxy
-// The proxy will forward /api to http://localhost:5000/api
-const API_URL = '/api';
+import { clientAPI } from '../api/clients';
 
 export const useClients = () => {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const getAuthHeader = () => {
-    const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-    const headers = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    };
+  // ✅ Helper to clean ID - removes quotes and trims
+  const sanitizeId = (id) => {
+    console.log('🔍 sanitizeId received:', id, 'type:', typeof id);
     
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+    if (id === null || id === undefined || id === '') {
+      console.log('❌ ID is null/undefined/empty');
+      return null;
     }
     
-    return { headers };
+    // Convert to string if it's not already
+    let clean = String(id);
+    console.log('📝 After String conversion:', clean);
+    
+    // Remove ALL quotes (both single and double)
+    clean = clean.replace(/["']/g, '');
+    console.log('📝 After removing quotes:', clean);
+    
+    // Trim whitespace
+    clean = clean.trim();
+    console.log('📝 After trim:', clean);
+    
+    // Check if we have a valid ID after cleaning
+    if (!clean || clean === '' || clean === 'null' || clean === 'undefined') {
+      console.log('❌ ID is invalid after cleaning');
+      return null;
+    }
+    
+    console.log('✅ Valid clean ID:', clean);
+    return clean;
   };
 
   const fetchClients = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      console.log('👥 Fetching clients from:', `${API_URL}/clients`);
-      const response = await fetch(`${API_URL}/clients`, {
-        method: 'GET',
-        ...getAuthHeader(),
-      });
+      console.log('👥 Fetching clients...');
+      const response = await clientAPI.getAll();
+      console.log('👥 Response:', response);
 
-      console.log('👥 Response status:', response.status);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      console.log('👥 Response data:', data);
-
-      if (data.success && data.data) {
-        console.log('✅ Clients loaded:', data.data.length, 'clients');
-        const formattedClients = data.data.map(client => ({
+      if (response.success && response.data) {
+        console.log('✅ Clients loaded:', response.data.length, 'clients');
+        const formattedClients = response.data.map(client => ({
           ...client,
           id: client.id || client._id
         }));
@@ -53,7 +56,7 @@ export const useClients = () => {
         return { success: true, data: formattedClients };
       }
       
-      throw new Error(data.error || 'Failed to fetch clients');
+      throw new Error(response.error || 'Failed to fetch clients');
     } catch (err) {
       console.error('❌ Error fetching clients:', err);
       setError(err.message);
@@ -78,25 +81,19 @@ export const useClients = () => {
     try {
       console.log('👤 Adding new client:', clientData);
       
-      const response = await fetch(`${API_URL}/clients`, {
-        method: 'POST',
-        ...getAuthHeader(),
-        body: JSON.stringify(clientData),
-      });
+      const response = await clientAPI.create(clientData);
+      console.log('👤 Add client response:', response);
 
-      const result = await response.json();
-      console.log('👤 Add client response:', result);
-
-      if (result.success && result.data) {
+      if (response.success && response.data) {
         const newClient = {
-          ...result.data,
-          id: result.data.id || result.data._id
+          ...response.data,
+          id: response.data.id || response.data._id
         };
         setClients(prev => [newClient, ...prev]);
         console.log('✅ Client added:', newClient);
         return { success: true, data: newClient };
       }
-      return { success: false, error: result.error || 'Failed to add client' };
+      return { success: false, error: response.error || 'Failed to add client' };
     } catch (err) {
       console.error('❌ Add client error:', err);
       return { success: false, error: err.message };
@@ -105,35 +102,75 @@ export const useClients = () => {
     }
   }, []);
 
+  // ✅ FIXED: updateClient with proper ID handling
   const updateClient = useCallback(async (id, updatedData) => {
+    console.log('📝 updateClient called with ID:', id);
+    console.log('📝 ID type:', typeof id);
+    console.log('📝 Updated data:', updatedData);
+    
     setLoading(true);
     setError(null);
     try {
-      console.log(`📝 Updating client: ${id}`);
+      // ✅ Sanitize the ID
+      const sanitizedId = sanitizeId(id);
       
-      const response = await fetch(`${API_URL}/clients/${id}`, {
-        method: 'PUT',
-        ...getAuthHeader(),
-        body: JSON.stringify(updatedData),
-      });
-
-      const result = await response.json();
-      console.log('📝 Update client response:', result);
-
-      if (result.success && result.data) {
-        const updatedClient = {
-          ...result.data,
-          id: result.data.id || result.data._id
-        };
-        setClients(prev => prev.map(client => 
-          (client.id === id || client._id === id) ? updatedClient : client
-        ));
-        console.log('✅ Client updated:', updatedClient);
-        return { success: true, data: updatedClient };
+      if (!sanitizedId) {
+        console.error('❌ Invalid client ID after sanitization');
+        setError('Invalid client ID');
+        return { success: false, error: 'Invalid client ID' };
       }
-      return { success: false, error: result.error || 'Failed to update client' };
+
+      console.log(`📝 Updating client with ID: "${sanitizedId}"`);
+      
+      // ✅ Format the data
+      const payload = {
+        name: updatedData.name || '',
+        email: updatedData.email || '',
+        phone: updatedData.phone || '',
+        company: updatedData.company || '',
+        type: updatedData.type || 'Individual',
+        status: updatedData.status || 'active',
+        address: updatedData.address || '',
+        city: updatedData.city || '',
+        state: updatedData.state || '',
+        zipCode: updatedData.zipCode || '',
+        country: updatedData.country || '',
+        notes: updatedData.notes || '',
+      };
+      
+      console.log('📝 Request payload:', payload);
+      
+      // ✅ Call the API with the sanitized ID
+      const response = await clientAPI.update(sanitizedId, payload);
+      console.log('📝 Update response:', response);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to update client');
+      }
+
+      const updatedClient = response.data ? {
+        ...response.data,
+        id: response.data.id || response.data._id || sanitizedId
+      } : {
+        ...payload,
+        id: sanitizedId
+      };
+      
+      // ✅ Update the clients state
+      setClients(prev => {
+        const updated = prev.map(client => {
+          const clientId = client.id || client._id;
+          return clientId === sanitizedId ? updatedClient : client;
+        });
+        console.log('📝 Updated clients state:', updated);
+        return updated;
+      });
+      
+      console.log('✅ Client updated:', updatedClient);
+      return { success: true, data: updatedClient };
     } catch (err) {
       console.error('❌ Update client error:', err);
+      setError(err.message);
       return { success: false, error: err.message };
     } finally {
       setLoading(false);
@@ -141,27 +178,40 @@ export const useClients = () => {
   }, []);
 
   const deleteClient = useCallback(async (id) => {
+    console.log('🗑️ deleteClient called with ID:', id);
+    
     setLoading(true);
     setError(null);
     try {
-      console.log(`🗑️ Deleting client: ${id}`);
+      // ✅ Sanitize the ID
+      const sanitizedId = sanitizeId(id);
       
-      const response = await fetch(`${API_URL}/clients/${id}`, {
-        method: 'DELETE',
-        ...getAuthHeader(),
-      });
-
-      const result = await response.json();
-      console.log('🗑️ Delete client response:', result);
-
-      if (result.success) {
-        setClients(prev => prev.filter(client => (client.id !== id && client._id !== id)));
-        console.log('✅ Client deleted:', id);
-        return { success: true };
+      if (!sanitizedId) {
+        console.error('❌ Invalid client ID for deletion');
+        setError('Invalid client ID');
+        return { success: false, error: 'Invalid client ID' };
       }
-      return { success: false, error: result.error || 'Failed to delete client' };
+
+      console.log(`🗑️ Deleting client: "${sanitizedId}"`);
+      
+      const response = await clientAPI.delete(sanitizedId);
+      console.log('🗑️ Delete response:', response);
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to delete client');
+      }
+      
+      // ✅ Remove from clients state
+      setClients(prev => prev.filter(client => {
+        const clientId = client.id || client._id;
+        return clientId !== sanitizedId;
+      }));
+      
+      console.log('✅ Client deleted:', sanitizedId);
+      return { success: true };
     } catch (err) {
       console.error('❌ Delete client error:', err);
+      setError(err.message);
       return { success: false, error: err.message };
     } finally {
       setLoading(false);
