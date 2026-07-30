@@ -21,8 +21,8 @@ export const config = {
   // API Configuration
   // ============================================
   api: {
-    baseURL: import.meta.env.VITE_API_URL || 'https://8bf7-2400-adc7-2918-d000-20b7-ebc1-38e1-bdf.ngrok-free.app/api',
-    wsURL: import.meta.env.VITE_WS_URL || 'wss://8bf7-2400-adc7-2918-d000-20b7-ebc1-38e1-bdf.ngrok-free.app/ws',
+    baseURL: import.meta.env.VITE_API_URL || 'https://e4dc-2400-adc7-2918-d000-2c7c-f0e5-1ef4-f4d4.ngrok-free.app/api',
+    wsURL: import.meta.env.VITE_WS_URL || 'wss://e4dc-2400-adc7-2918-d000-2c7c-f0e5-1ef4-f4d4.ngrok-free.app/ws',
     timeout: 30000,
     retryCount: 3,
     retryDelay: 1000,
