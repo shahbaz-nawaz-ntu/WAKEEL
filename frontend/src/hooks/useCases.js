@@ -2,7 +2,12 @@
 
 import { useState, useCallback, useEffect } from 'react';
 
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+// ✅ FIX: Use relative URL for development with proxy
+// or use environment variable for production
+let API_URL = import.meta.env.VITE_API_URL || '/api';
+if (API_URL && API_URL !== '/api' && !API_URL.endsWith('/api')) {
+  API_URL = `${API_URL.replace(/\/+$/, '')}/api`;
+}
 
 export const useCases = () => {
   const [cases, setCases] = useState([]);
@@ -16,6 +21,7 @@ export const useCases = () => {
     
     const headers = {
       'Accept': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
     };
     
     if (token) {

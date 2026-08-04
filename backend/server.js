@@ -169,7 +169,7 @@ console.log('✅ Passport strategies configured');
 
 console.log('📦 Setting up CORS...');
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174', 'https://wakeelapp.netlify.app'],
+  origin: ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174', 'https://wakeelapp.netlify.app', 'https://wakeelsapp.netlify.app'],
   credentials: true,
 }));
 

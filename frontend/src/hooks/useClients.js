@@ -2,6 +2,13 @@
 import { useState, useCallback, useEffect } from 'react';
 import { clientAPI } from '../api/clients';
 
+// ✅ FIX: Use relative URL for development with proxy
+// The proxy will forward /api to http://localhost:5000/api
+let API_URL = import.meta.env.VITE_API_URL || '/api';
+if (API_URL && API_URL !== '/api' && !API_URL.endsWith('/api')) {
+  API_URL = `${API_URL.replace(/\/+$/, '')}/api`;
+}
+
 export const useClients = () => {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -30,6 +37,13 @@ export const useClients = () => {
     let clean = String(id);
     clean = clean.replace(/["']/g, '');
     clean = clean.trim();
+  const getAuthHeader = () => {
+    const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'ngrok-skip-browser-warning': 'true',
+    };
     
     if (!clean || clean === '' || clean === 'null' || clean === 'undefined') {
       console.log('❌ ID is invalid after cleaning');

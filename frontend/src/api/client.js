@@ -6,13 +6,22 @@ import toast from 'react-hot-toast';
 // API Configuration
 // ============================================
 const getApiUrl = () => {
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
+  let url = import.meta.env.VITE_API_URL;
+  
+  if (!url) {
+    if (import.meta.env.DEV) {
+      url = '/api';
+    } else {
+      url = config.api.baseURL;
+    }
   }
-  if (import.meta.env.DEV) {
-    return '/api';
+  
+  // Ensure URL ends with /api to prevent Route Not Found errors
+  if (url && url !== '/api' && !url.endsWith('/api')) {
+    url = `${url.replace(/\/+$/, '')}/api`;
   }
-  return '/api';
+  
+  return url;
 };
 
 const API_URL = getApiUrl();
@@ -27,6 +36,7 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
+    'ngrok-skip-browser-warning': 'true',
   },
   withCredentials: true,
 });
