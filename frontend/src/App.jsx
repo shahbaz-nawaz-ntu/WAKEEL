@@ -1,7 +1,9 @@
-// src/App.jsx - COMPLETE WORKING VERSION WITH PROFESSIONAL NEW BADGE
+// src/App.jsx - COMPLETE WORKING VERSION WITH MODAL FIX
+import './styles/responsive.css';
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster, toast } from 'react-hot-toast';
+import  NotificationProvider    from './contexts/NotificationContext';
 
 // ============================================
 // HOOKS - ALL NAMED IMPORTS
@@ -49,6 +51,7 @@ import AddCaseModal from './components/modals/AddCaseModal';
 import EditCaseModal from './components/modals/EditCaseModal';
 import CaseDetailModal from './components/modals/CaseDetailModal';
 import AddReferenceModal from './components/modals/AddReferenceModal';
+import TodayScheduleModal from './components/modals/TodayScheduleModal';
 
 // ============================================
 // API
@@ -257,7 +260,7 @@ const COMMENT_STATUS_OPTIONS = [
 ];
 
 // ============================================
-// ADD COMMENT MODAL INLINE - ONLY REQUESTED FIELDS
+// ADD COMMENT MODAL INLINE
 // ============================================
 const AddCommentModalInline = ({ isOpen, onClose, onSave, caseId }) => {
   const [formData, setFormData] = useState({
@@ -746,7 +749,7 @@ const AddPartyModal = ({ isOpen, onClose, onSave }) => {
 };
 
 // ============================================
-// EDIT PARTY MODAL - COMPLETE FIXED
+// EDIT PARTY MODAL
 // ============================================
 const EditPartyModal = ({ isOpen, onClose, onSave, party }) => {
   const [formData, setFormData] = useState({
@@ -1030,6 +1033,8 @@ const DashboardContent = () => {
     addClient,
     updateClient,
     deleteClient,
+    fetchClients,
+    
   } = useClients();
 
   const {
@@ -1082,6 +1087,7 @@ const DashboardContent = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddReferenceModalOpen, setIsAddReferenceModalOpen] = useState(false);
+  const [isTodayScheduleOpen, setIsTodayScheduleOpen] = useState(false); 
   const [selectedCase, setSelectedCase] = useState(null);
   const [caseToEdit, setCaseToEdit] = useState(null);
   
@@ -1126,9 +1132,9 @@ const DashboardContent = () => {
   // ============================================
   const NEW_BADGE_CONFIG = {
     enabled: true,
-    daysToShow: 7,          // Show NEW badge for 7 days
-    showUntilViewed: true,   // Hide once case is viewed
-    pulseAnimation: true,    // Animate the badge
+    daysToShow: 7,
+    showUntilViewed: true,
+    pulseAnimation: true,
   };
 
   // ============================================
@@ -1137,12 +1143,10 @@ const DashboardContent = () => {
   const isNewCase = (caseItem) => {
     if (!caseItem || !NEW_BADGE_CONFIG.enabled) return false;
     
-    // If showUntilViewed is true and case has been viewed
     if (NEW_BADGE_CONFIG.showUntilViewed && caseItem.viewedAt) {
       return false;
     }
     
-    // Check by createdAt timestamp
     if (caseItem.createdAt) {
       const createdDate = new Date(caseItem.createdAt);
       const now = new Date();
@@ -1150,7 +1154,6 @@ const DashboardContent = () => {
       return diffDays < NEW_BADGE_CONFIG.daysToShow;
     }
     
-    // Fallback: check isNew flag
     return caseItem.isNew === true;
   };
 
@@ -1162,7 +1165,6 @@ const DashboardContent = () => {
     
     const caseId = caseItem.id || caseItem._id;
     
-    // Only mark if it's new
     if (isNewCase(caseItem)) {
       try {
         await api.patch(`/cases/${caseId}`, { 
@@ -1187,7 +1189,7 @@ const DashboardContent = () => {
   };
 
   // ============================================
-  // AUTO DATE FILTER - Triggers on change
+  // AUTO DATE FILTER
   // ============================================
   const handleDateChange = (e) => {
     const value = e.target.value;
@@ -1200,7 +1202,7 @@ const DashboardContent = () => {
   };
 
   // ============================================
-  // DEPARTMENT FILTER - Triggers on change
+  // DEPARTMENT FILTER
   // ============================================
   const handleDepartmentChange = (e) => {
     const value = e.target.value;
@@ -1213,7 +1215,7 @@ const DashboardContent = () => {
   };
 
   // ============================================
-  // STATUS FILTER - Triggers on change
+  // STATUS FILTER
   // ============================================
   const handleStatusChange = (e) => {
     const value = e.target.value;
@@ -1423,6 +1425,11 @@ const DashboardContent = () => {
       setAllParties(window.__allParties);
       setCaseParties(prev => [...prev, newPartyData]);
       setRefreshTrigger(prev => prev + 1);
+
+      await fetchParties();
+      if (caseId) {
+        await fetchPartiesForCase(caseId);
+      }
       
       toast.success('✅ Party added successfully!');
       return response.data;
@@ -1483,6 +1490,13 @@ const DashboardContent = () => {
       ));
       
       setRefreshTrigger(prev => prev + 1);
+
+      await fetchParties();
+      const caseIdForRefetch = selectedCase?._id || selectedCase?.id;
+      if (caseIdForRefetch) {
+        await fetchPartiesForCase(caseIdForRefetch);
+      }
+
       toast.success('✅ Party updated successfully!');
       return response.data;
       
@@ -1520,6 +1534,12 @@ const DashboardContent = () => {
       ));
       
       setRefreshTrigger(prev => prev + 1);
+
+      await fetchParties();
+      const caseIdForRefetch = selectedCase?._id || selectedCase?.id;
+      if (caseIdForRefetch) {
+        await fetchPartiesForCase(caseIdForRefetch);
+      }
       
       toast.success('✅ Party deleted successfully!');
       
@@ -1563,6 +1583,11 @@ const DashboardContent = () => {
       setAllComments(window.__allComments);
       setCaseComments(prev => [...prev, newCommentData]);
       setRefreshTrigger(prev => prev + 1);
+
+      await fetchComments();
+      if (caseId) {
+        await fetchCommentsForCase(caseId);
+      }
       
       toast.success('✅ Comment added successfully!');
       return response.data;
@@ -1595,6 +1620,12 @@ const DashboardContent = () => {
       ));
       
       setRefreshTrigger(prev => prev + 1);
+
+      await fetchComments();
+      const caseIdForRefetch = selectedCase?._id || selectedCase?.id;
+      if (caseIdForRefetch) {
+        await fetchCommentsForCase(caseIdForRefetch);
+      }
       
       toast.success('✅ Comment updated successfully!');
       return response.data;
@@ -1631,6 +1662,12 @@ const DashboardContent = () => {
       ));
       
       setRefreshTrigger(prev => prev + 1);
+
+      await fetchComments();
+      const caseIdForRefetch = selectedCase?._id || selectedCase?.id;
+      if (caseIdForRefetch) {
+        await fetchCommentsForCase(caseIdForRefetch);
+      }
       
       toast.success('✅ Comment deleted successfully!');
       
@@ -1689,34 +1726,81 @@ const DashboardContent = () => {
     await fetchCases();
   }, [fetchCases]);
 
+  // ✅ FIXED: refreshSelectedCase - updates without closing modal
   const refreshSelectedCase = useCallback(async () => {
     if (!selectedCase) return null;
     
     const caseId = selectedCase.id || selectedCase._id;
     console.log('🔄 Refreshing selected case:', caseId);
     
-    const updatedCase = cases.find(c => 
-      (c.id === caseId || c._id === caseId)
-    );
-    
-    if (updatedCase) {
-      setSelectedCase(updatedCase);
-      console.log('✅ Selected case updated from cases array');
-      return updatedCase;
-    }
-    
     try {
+      // ✅ Try to find the case in the existing cases array first
+      const updatedCase = cases.find(c => 
+        (c.id === caseId || c._id === caseId)
+      );
+      
+      if (updatedCase) {
+        // ✅ Update the selectedCase state WITHOUT closing the modal
+        setSelectedCase(updatedCase);
+        console.log('✅ Selected case updated from cases array');
+        
+        // ✅ Also refresh the case-specific data (proceedings, comments, parties)
+        await fetchCaseData(caseId);
+        
+        return updatedCase;
+      }
+      
+      // ✅ If not found in array, fetch from API
       const result = await fetchCaseById(caseId);
       if (result && result.success) {
         setSelectedCase(result.data);
         console.log('✅ Selected case fetched from API');
+        
+        // ✅ Refresh case-specific data
+        await fetchCaseData(caseId);
+        
         return result.data;
       }
     } catch (error) {
       console.error('❌ Failed to refresh selected case:', error);
     }
     return null;
-  }, [selectedCase, cases, fetchCaseById]);
+  }, [selectedCase, cases, fetchCaseById, fetchCaseData]);
+
+  // ============================================
+  // SCHEDULE REFRESH HANDLER
+  // ============================================
+  const scheduleRefreshRef = useRef(null);
+  
+  const handleScheduleRefresh = useCallback(async () => {
+    console.log('🔄 Schedule refresh triggered from modal');
+    
+    if (scheduleRefreshRef.current) {
+      console.log('⏳ Refresh already in progress, returning current cases');
+      return { data: cases };
+    }
+    
+    scheduleRefreshRef.current = true;
+    
+    try {
+      const response = await api.get('/cases');
+      console.log('📥 Schedule refresh response:', response);
+      
+      const freshCases = response.data?.data || response.data || [];
+      console.log('📊 Fresh cases count:', freshCases.length);
+      
+      await fetchCases();
+      
+      return { data: freshCases };
+    } catch (error) {
+      console.error('❌ Schedule refresh error:', error);
+      return { data: cases };
+    } finally {
+      setTimeout(() => {
+        scheduleRefreshRef.current = false;
+      }, 500);
+    }
+  }, [cases, fetchCases]);
 
   // ============================================
   // SOLVED CASES
@@ -1727,7 +1811,7 @@ const DashboardContent = () => {
   }, [cases]);
 
   // ============================================
-  // FILTERED CASES WITH DATE + DEPARTMENT + STATUS + SEARCH
+  // FILTERED CASES
   // ============================================
   const filteredCases = useMemo(() => {
     let filtered = cases;
@@ -1813,7 +1897,26 @@ const DashboardContent = () => {
     return filtered;
   }, [cases, activeTab, searchFilters, dateFilter, departmentFilter, statusFilter]);
 
-  const stats = getStats();
+  const stats = useMemo(() => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const todayCasesCount = cases.filter(c => {
+    const hearingDate = c.nextDateOfHearing || c.nextHearing || c.nexthearing || c.courtDetails?.nextDate;
+    if (!hearingDate) return false;
+    const date = new Date(hearingDate);
+    date.setHours(0, 0, 0, 0);
+    return date.getTime() === today.getTime();
+  }).length;
+
+  return {
+    total: cases.length,
+    active: cases.filter(c => c.status === 'active').length,
+    pending: cases.filter(c => c.status === 'pending').length,
+    closed: cases.filter(c => c.status === 'closed').length,
+    todayCases: todayCasesCount,
+  };
+}, [cases]);
 
   const tabs = [
     { id: 'all', label: 'All', count: filteredCases.length },
@@ -1856,16 +1959,75 @@ const DashboardContent = () => {
     console.log('👤 Adding client from App:', newClient);
     const result = await addClient(newClient);
     console.log('👤 Result:', result);
+    if (result && result.success) {
+      await fetchClients();
+    }
     return result;
   };
 
-  const handleEditClient = async (updatedClient) => {
-    const result = await updateClient(updatedClient.id || updatedClient._id, updatedClient);
+  const handleTodaySchedule = () => {
+    setIsTodayScheduleOpen(true);
+  };
+
+  const handleEditClient = async (clientId, clientData) => {
+    console.log('📝 App - handleEditClient called');
+    console.log('📝 clientId:', clientId);
+    console.log('📝 clientData:', clientData);
+    
+    let result;
+    
+    if (clientId && typeof clientId === 'string' && clientId.length > 10) {
+      console.log('📝 Pattern: (id, data)');
+      result = await updateClient(clientId, clientData);
+    } 
+    else if (clientId && typeof clientId === 'object') {
+      const id = clientId.id || clientId._id;
+      console.log('📝 Pattern: (clientObject) - extracted ID:', id);
+      if (!id) {
+        console.error('❌ No ID found in client object');
+        return { success: false, error: 'No client ID found' };
+      }
+      result = await updateClient(id, clientId);
+    }
+    else if (!clientId && clientData && typeof clientData === 'object') {
+      const id = clientData.id || clientData._id;
+      console.log('📝 Pattern: (undefined, data) - extracted ID:', id);
+      if (!id) {
+        console.error('❌ No ID found in data object');
+        return { success: false, error: 'No client ID found' };
+      }
+      result = await updateClient(id, clientData);
+    }
+    else if (!clientId && clientData && typeof clientData === 'string') {
+      console.log('📝 Pattern: (undefined, idString)');
+      result = await updateClient(clientData, {});
+    }
+    else {
+      console.error('❌ Unknown argument pattern:', { clientId, clientData });
+      return { success: false, error: 'Invalid arguments' };
+    }
+    
+    console.log('📝 Update result:', result);
+    
+    if (result && result.success) {
+      console.log('🔄 Refreshing clients list after update...');
+      await fetchClients();
+      console.log('✅ Clients list refreshed, count:', clients.length);
+    }
+    
     return result;
   };
 
   const handleDeleteClient = async (clientId) => {
+    console.log('🗑️ App - handleDeleteClient called with ID:', clientId);
     const result = await deleteClient(clientId);
+    
+    if (result && result.success) {
+      console.log('🔄 Refreshing clients list after delete...');
+      await fetchClients();
+      console.log('✅ Clients list refreshed');
+    }
+    
     return result;
   };
 
@@ -2003,7 +2165,6 @@ const DashboardContent = () => {
       return;
     }
     
-    // ✅ Mark case as viewed when opened
     markCaseAsViewed(caseItem);
     
     const caseId = caseItem._id || caseItem.id;
@@ -2815,25 +2976,12 @@ const DashboardContent = () => {
   // ============================================
   return (
     <>
-      <Toaster 
-        position="top-right"
-        toastOptions={{
-          duration: 4000,
-          style: {
-            background: '#FFFFFF',
-            color: '#1B262C',
-            border: '1px solid #BBE1FA',
-            borderRadius: '12px',
-            boxShadow: '0 8px 32px rgba(15, 76, 117, 0.12)',
-          },
-        }}
-      />
-      
       <div className="min-h-screen bg-gradient-to-br from-[#F0F4F8] via-[#F0F4F8] to-[#BBE1FA]/20 flex flex-col">
         <div className="fixed top-0 left-0 right-0 h-1 z-50 bg-gradient-to-r from-[#1B262C] via-[#0F4C75] to-[#3282B8]"></div>
         
         <Header 
           onAddClick={() => setIsAddModalOpen(true)}
+          onTodaySchedule={handleTodaySchedule} 
           stats={stats}
           cases={cases}
           onNavigate={handleNavigate}
@@ -2863,157 +3011,195 @@ const DashboardContent = () => {
           onRefresh={refreshCases}
         />
 
-        {selectedCase && (
-          <CaseDetailModal
-            key={selectedCase._id || selectedCase.id}
-            isOpen={!!selectedCase}
-            case={selectedCase}
-            onClose={() => {
-              console.log('🔴 Closing case detail modal');
-              setSelectedCase(null);
-              modalRef.current = false;
-            }}
-            onStatusChange={updateCaseStatus}
-            onEdit={(caseItem) => {
-              handleEdit(caseItem);
-            }}
-            onDelete={deleteCase}
-            onDeleteComplete={() => {
-              console.log('🔄 Delete complete - refreshing data');
-              refreshCases();
-            }}
-            onRefresh={() => {
-              console.log('🔄 Refreshing selected case from App');
-              refreshSelectedCase();
-            }}
-            proceedings={caseProceedings}
-            onAddProceeding={async (data) => {
-              console.log('📝 App: Adding proceeding via prop:', data);
-              try {
-                const result = await handleAddProceeding(data);
-                console.log('✅ Add proceeding result:', result);
-                await refreshCases();
+        {/* ✅ FIXED: Always render the modal, control with isOpen prop */}
+        <CaseDetailModal
+          key={refreshTrigger}
+          isOpen={!!selectedCase}
+          case={selectedCase}
+          onClose={() => {
+            console.log('🔴 Closing case detail modal');
+            setSelectedCase(null);
+            modalRef.current = false;
+          }}
+          onStatusChange={updateCaseStatus}
+          onEdit={(caseItem) => {
+            handleEdit(caseItem);
+          }}
+          onDelete={deleteCase}
+          onDeleteComplete={() => {
+            console.log('🔄 Delete complete - refreshing data');
+            refreshCases();
+          }}
+          onRefresh={async () => {
+            console.log('🔄 Refreshing selected case from App');
+            await refreshSelectedCase();
+            if (selectedCase) {
+              const caseId = selectedCase._id || selectedCase.id;
+              await fetchCaseData(caseId);
+            }
+            setRefreshTrigger(prev => prev + 1);
+          }}
+          proceedings={caseProceedings}
+          onAddProceeding={async (data) => {
+            console.log('📝 App: Adding proceeding via prop:', data);
+            try {
+              const result = await handleAddProceeding(data);
+              console.log('✅ Add proceeding result:', result);
+              await refreshSelectedCase();
+              if (selectedCase) {
                 await fetchCaseData(selectedCase._id || selectedCase.id);
-                return result;
-              } catch (error) {
-                console.error('❌ Error in onAddProceeding:', error);
-                throw error;
               }
-            }}
-            onUpdateProceeding={async (id, data) => {
-              console.log('📝 App: Updating proceeding:', id, data);
-              try {
-                const result = await handleUpdateProceeding(id, data);
-                console.log('✅ Update proceeding result:', result);
-                await refreshCases();
+              setRefreshTrigger(prev => prev + 1);
+              return result;
+            } catch (error) {
+              console.error('❌ Error in onAddProceeding:', error);
+              throw error;
+            }
+          }}
+          onUpdateProceeding={async (id, data) => {
+            console.log('📝 App: Updating proceeding:', id, data);
+            try {
+              const result = await handleUpdateProceeding(id, data);
+              console.log('✅ Update proceeding result:', result);
+              await refreshSelectedCase();
+              if (selectedCase) {
                 await fetchCaseData(selectedCase._id || selectedCase.id);
-                return result;
-              } catch (error) {
-                console.error('❌ Error in onUpdateProceeding:', error);
-                throw error;
               }
-            }}
-            onDeleteProceeding={async (id) => {
-              console.log('🗑️ App: Deleting proceeding:', id);
-              try {
-                const result = await handleDeleteProceeding(id);
-                console.log('✅ Delete proceeding result:', result);
-                await refreshCases();
+              setRefreshTrigger(prev => prev + 1);
+              return result;
+            } catch (error) {
+              console.error('❌ Error in onUpdateProceeding:', error);
+              throw error;
+            }
+          }}
+          onDeleteProceeding={async (id) => {
+            console.log('🗑️ App: Deleting proceeding:', id);
+            try {
+              const result = await handleDeleteProceeding(id);
+              console.log('✅ Delete proceeding result:', result);
+              await refreshSelectedCase();
+              if (selectedCase) {
                 await fetchCaseData(selectedCase._id || selectedCase.id);
-                return result;
-              } catch (error) {
-                console.error('❌ Error in onDeleteProceeding:', error);
-                throw error;
               }
-            }}
-            comments={caseComments}
-            onAddComment={async (data) => {
-              console.log('📝 App: Adding comment via prop:', data);
-              try {
-                const result = await handleAddComment(data);
-                console.log('✅ Add comment result:', result);
-                await refreshCases();
+              setRefreshTrigger(prev => prev + 1);
+              return result;
+            } catch (error) {
+              console.error('❌ Error in onDeleteProceeding:', error);
+              throw error;
+            }
+          }}
+          comments={caseComments}
+          onAddComment={async (data) => {
+            console.log('📝 App: Adding comment via prop:', data);
+            try {
+              const result = await handleAddComment(data);
+              console.log('✅ Add comment result:', result);
+              await refreshSelectedCase();
+              if (selectedCase) {
                 await fetchCaseData(selectedCase._id || selectedCase.id);
-                return result;
-              } catch (error) {
-                console.error('❌ Error in onAddComment:', error);
-                throw error;
               }
-            }}
-            onUpdateComment={async (id, data) => {
-              console.log('📝 App: Updating comment:', id, data);
-              try {
-                const result = await handleUpdateComment(id, data);
-                console.log('✅ Update comment result:', result);
-                await refreshCases();
+              setRefreshTrigger(prev => prev + 1);
+              return result;
+            } catch (error) {
+              console.error('❌ Error in onAddComment:', error);
+              throw error;
+            }
+          }}
+          onUpdateComment={async (id, data) => {
+            console.log('📝 App: Updating comment:', id, data);
+            try {
+              const result = await handleUpdateComment(id, data);
+              console.log('✅ Update comment result:', result);
+              await refreshSelectedCase();
+              if (selectedCase) {
                 await fetchCaseData(selectedCase._id || selectedCase.id);
-                return result;
-              } catch (error) {
-                console.error('❌ Error in onUpdateComment:', error);
-                throw error;
               }
-            }}
-            onDeleteComment={async (id) => {
-              console.log('🗑️ App: Deleting comment:', id);
-              try {
-                const result = await handleDeleteComment(id);
-                console.log('✅ Delete comment result:', result);
-                await refreshCases();
+              setRefreshTrigger(prev => prev + 1);
+              return result;
+            } catch (error) {
+              console.error('❌ Error in onUpdateComment:', error);
+              throw error;
+            }
+          }}
+          onDeleteComment={async (id) => {
+            console.log('🗑️ App: Deleting comment:', id);
+            try {
+              const result = await handleDeleteComment(id);
+              console.log('✅ Delete comment result:', result);
+              await refreshSelectedCase();
+              if (selectedCase) {
                 await fetchCaseData(selectedCase._id || selectedCase.id);
-                return result;
-              } catch (error) {
-                console.error('❌ Error in onDeleteComment:', error);
-                throw error;
               }
-            }}
-            parties={caseParties}
-            onAddParty={async (data) => {
-              console.log('👤 App: Adding party via prop:', data);
-              try {
-                const result = await handleAddParty(data);
-                console.log('✅ Add party result:', result);
-                await refreshCases();
+              setRefreshTrigger(prev => prev + 1);
+              return result;
+            } catch (error) {
+              console.error('❌ Error in onDeleteComment:', error);
+              throw error;
+            }
+          }}
+          parties={caseParties}
+          onAddParty={async (data) => {
+            console.log('👤 App: Adding party via prop:', data);
+            try {
+              const result = await handleAddParty(data);
+              console.log('✅ Add party result:', result);
+              await refreshSelectedCase();
+              if (selectedCase) {
                 await fetchCaseData(selectedCase._id || selectedCase.id);
-                return result;
-              } catch (error) {
-                console.error('❌ Error in onAddParty:', error);
-                throw error;
               }
-            }}
-            onUpdateParty={async (id, data) => {
-              console.log('👤 App: Updating party - ID:', id);
-              console.log('👤 App: Updating party - Data:', data);
-              try {
-                const result = await handleEditParty({ ...data, id: id, _id: id });
-                console.log('✅ Update party result:', result);
-                await refreshCases();
+              setRefreshTrigger(prev => prev + 1);
+              return result;
+            } catch (error) {
+              console.error('❌ Error in onAddParty:', error);
+              throw error;
+            }
+          }}
+          onUpdateParty={async (id, data) => {
+            console.log('👤 App: Updating party - ID:', id);
+            console.log('👤 App: Updating party - Data:', data);
+            try {
+              const result = await handleEditParty({ ...data, id: id, _id: id });
+              console.log('✅ Update party result:', result);
+              await refreshSelectedCase();
+              if (selectedCase) {
                 await fetchCaseData(selectedCase._id || selectedCase.id);
-                return result;
-              } catch (error) {
-                console.error('❌ Error in onUpdateParty:', error);
-                throw error;
               }
-            }}
-            onDeleteParty={async (id) => {
-              console.log('🗑️ App: Deleting party:', id);
-              try {
-                const result = await handleDeleteParty(id);
-                console.log('✅ Delete party result:', result);
-                await refreshCases();
+              setRefreshTrigger(prev => prev + 1);
+              return result;
+            } catch (error) {
+              console.error('❌ Error in onUpdateParty:', error);
+              throw error;
+            }
+          }}
+          onDeleteParty={async (id) => {
+            console.log('🗑️ App: Deleting party:', id);
+            try {
+              const result = await handleDeleteParty(id);
+              console.log('✅ Delete party result:', result);
+              await refreshSelectedCase();
+              if (selectedCase) {
                 await fetchCaseData(selectedCase._id || selectedCase.id);
-                return result;
-              } catch (error) {
-                console.error('❌ Error in onDeleteParty:', error);
-                throw error;
               }
-            }}
-          />
-        )}
+              setRefreshTrigger(prev => prev + 1);
+              return result;
+            } catch (error) {
+              console.error('❌ Error in onDeleteParty:', error);
+              throw error;
+            }
+          }}
+        />
 
         <AddReferenceModal
           isOpen={isAddReferenceModalOpen}
           onClose={() => setIsAddReferenceModalOpen(false)}
           onAdd={handleAddReferenceCase}
+        />
+        
+        <TodayScheduleModal
+          isOpen={isTodayScheduleOpen}
+          onClose={() => setIsTodayScheduleOpen(false)}
+          cases={cases}
+          onRefresh={handleScheduleRefresh}
         />
 
         <DeleteConfirmModal
@@ -3065,35 +3251,63 @@ const DashboardContent = () => {
 // ============================================
 function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
-      <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/auth/callback" element={<AuthCallback />} />
+    <NotificationProvider>
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#FFFFFF',
+            color: '#1B262C',
+            border: '1px solid #BBE1FA',
+            borderRadius: '12px',
+            boxShadow: '0 8px 32px rgba(15, 76, 117, 0.12)',
+          },
+          success: {
+            icon: '✅',
+            style: {
+              border: '1px solid #22C55E',
+            },
+          },
+          error: {
+            icon: '❌',
+            style: {
+              border: '1px solid #EF4444',
+            },
+          },
+        }}
+      />
       
-      <Route path="/" element={
-        <ProtectedRoute>
-          <DashboardContent />
-        </ProtectedRoute>
-      } />
-      <Route path="/dashboard" element={
-        <ProtectedRoute>
-          <DashboardContent />
-        </ProtectedRoute>
-      } />
-      <Route path="/profile" element={
-        <ProtectedRoute>
-          <DashboardContent />
-        </ProtectedRoute>
-      } />
-      <Route path="/settings" element={
-        <ProtectedRoute>
-          <DashboardContent />
-        </ProtectedRoute>
-      } />
-      
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
-    </Routes>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+        
+        <Route path="/" element={
+          <ProtectedRoute>
+            <DashboardContent />
+          </ProtectedRoute>
+        } />
+        <Route path="/dashboard" element={
+          <ProtectedRoute>
+            <DashboardContent />
+          </ProtectedRoute>
+        } />
+        <Route path="/profile" element={
+          <ProtectedRoute>
+            <DashboardContent />
+          </ProtectedRoute>
+        } />
+        <Route path="/settings" element={
+          <ProtectedRoute>
+            <DashboardContent />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </NotificationProvider>
   );
 }
 

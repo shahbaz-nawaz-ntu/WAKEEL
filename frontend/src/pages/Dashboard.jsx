@@ -749,111 +749,110 @@ const Dashboard = () => {
   // ============================================
   // REGISTER GLOBAL HELPERS
   // ============================================
-  // ============================================
-// ✅ STORE DATA GLOBALLY (ADD THIS NEW BLOCK)
-// ============================================
-useEffect(() => {
-  if (proceedings.length > 0) {
-    window.__allProceedings = proceedings;
-    console.log('✅ Updated global allProceedings:', proceedings.length);
-  }
-}, [proceedings]);
-
-useEffect(() => {
-  if (comments.length > 0) {
-    window.__allComments = comments;
-    console.log('✅ Updated global allComments:', comments.length);
-  }
-}, [comments]);
-
-useEffect(() => {
-  if (parties.length > 0) {
-    window.__allParties = parties;
-    console.log('✅ Updated global allParties:', parties.length);
-  }
-}, [parties]);
-
-useEffect(() => {
-  if (cases.length > 0) {
-    window.__cases = cases;
-    console.log('✅ Updated global cases:', cases.length);
-  }
-}, [cases]);
-
-// ============================================
-// REGISTER GLOBAL HELPERS (REPLACE THIS)
-// ============================================
-useEffect(() => {
-  if (typeof window !== 'undefined') {
-    // Register functions
-    window.__handleRefresh = handleRefresh;
-    window.__handleAddProceeding = handleAddProceeding;
-    window.__handleAddComment = handleAddComment;
-    window.__handleAddParty = handleAddParty;
-    window.__handleFetchProceedings = fetchProceedings;
-    window.__handleFetchComments = fetchComments;      // ✅ ADDED
-    window.__handleFetchParties = fetchParties;        // ✅ ADDED
-    window.__handleRefreshSelectedCase = handleRefresh;
-    window.__handleFetchCaseById = fetchCases;
-    window.__handleView = (caseItem) => {
-      console.log('👁️ Global handleView called for case:', caseItem?._id || caseItem?.id);
-      setSelectedCase(caseItem);
-    };
-    
-    // Store data globally
-    window.__proceedings = proceedings;
-    window.__comments = comments;                      // ✅ ADDED
-    window.__parties = parties;                        // ✅ ADDED
-    window.__cases = cases;                            // ✅ ADDED
-    window.__allProceedings = proceedings;            // ✅ ADDED
-    window.__allComments = comments;                  // ✅ ADDED
-    window.__allParties = parties;                    // ✅ ADDED
-    window.__selectedCase = selectedCase;              // ✅ ADDED
-    
-    console.log('✅ Global helpers registered:');
-    console.log('  - __allProceedings:', window.__allProceedings?.length || 0);
-    console.log('  - __allComments:', window.__allComments?.length || 0);
-    console.log('  - __allParties:', window.__allParties?.length || 0);
-    console.log('  - __cases:', window.__cases?.length || 0);
-  }
-  
-  return () => {
-    if (typeof window !== 'undefined') {
-      delete window.__handleRefresh;
-      delete window.__handleAddProceeding;
-      delete window.__handleAddComment;
-      delete window.__handleAddParty;
-      delete window.__handleFetchProceedings;
-      delete window.__handleFetchComments;
-      delete window.__handleFetchParties;
-      delete window.__handleRefreshSelectedCase;
-      delete window.__handleFetchCaseById;
-      delete window.__handleView;
-      delete window.__proceedings;
-      delete window.__comments;
-      delete window.__parties;
-      delete window.__cases;
-      delete window.__allProceedings;
-      delete window.__allComments;
-      delete window.__allParties;
-      delete window.__selectedCase;
+  // ✅ STORE DATA GLOBALLY
+  useEffect(() => {
+    if (proceedings.length > 0) {
+      window.__allProceedings = proceedings;
+      console.log('✅ Updated global allProceedings:', proceedings.length);
     }
-  };
-}, [
-  handleRefresh, 
-  handleAddProceeding, 
-  handleAddComment, 
-  handleAddParty, 
-  fetchProceedings, 
-  fetchComments, 
-  fetchParties, 
-  fetchCases, 
-  proceedings, 
-  comments, 
-  parties, 
-  cases,
-  selectedCase
-]);
+  }, [proceedings]);
+
+  useEffect(() => {
+    if (comments.length > 0) {
+      window.__allComments = comments;
+      console.log('✅ Updated global allComments:', comments.length);
+    }
+  }, [comments]);
+
+  useEffect(() => {
+    if (parties.length > 0) {
+      window.__allParties = parties;
+      console.log('✅ Updated global allParties:', parties.length);
+    }
+  }, [parties]);
+
+  useEffect(() => {
+    if (cases.length > 0) {
+      window.__cases = cases;
+      console.log('✅ Updated global cases:', cases.length);
+    }
+  }, [cases]);
+
+  // ============================================
+  // REGISTER GLOBAL HELPERS
+  // ============================================
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // Register functions
+      window.__handleRefresh = handleRefresh;
+      window.__handleAddProceeding = handleAddProceeding;
+      window.__handleAddComment = handleAddComment;
+      window.__handleAddParty = handleAddParty;
+      window.__handleFetchProceedings = fetchProceedings;
+      window.__handleFetchComments = fetchComments;
+      window.__handleFetchParties = fetchParties;
+      window.__handleRefreshSelectedCase = handleRefresh;
+      window.__handleFetchCaseById = fetchCases;
+      window.__handleView = (caseItem) => {
+        console.log('👁️ Global handleView called for case:', caseItem?._id || caseItem?.id);
+        setSelectedCase(caseItem);
+      };
+      
+      // Store data globally
+      window.__proceedings = proceedings;
+      window.__comments = comments;
+      window.__parties = parties;
+      window.__cases = cases;
+      window.__allProceedings = proceedings;
+      window.__allComments = comments;
+      window.__allParties = parties;
+      window.__selectedCase = selectedCase;
+      
+      console.log('✅ Global helpers registered:');
+      console.log('  - __allProceedings:', window.__allProceedings?.length || 0);
+      console.log('  - __allComments:', window.__allComments?.length || 0);
+      console.log('  - __allParties:', window.__allParties?.length || 0);
+      console.log('  - __cases:', window.__cases?.length || 0);
+    }
+    
+    return () => {
+      if (typeof window !== 'undefined') {
+        delete window.__handleRefresh;
+        delete window.__handleAddProceeding;
+        delete window.__handleAddComment;
+        delete window.__handleAddParty;
+        delete window.__handleFetchProceedings;
+        delete window.__handleFetchComments;
+        delete window.__handleFetchParties;
+        delete window.__handleRefreshSelectedCase;
+        delete window.__handleFetchCaseById;
+        delete window.__handleView;
+        delete window.__proceedings;
+        delete window.__comments;
+        delete window.__parties;
+        delete window.__cases;
+        delete window.__allProceedings;
+        delete window.__allComments;
+        delete window.__allParties;
+        delete window.__selectedCase;
+      }
+    };
+  }, [
+    handleRefresh, 
+    handleAddProceeding, 
+    handleAddComment, 
+    handleAddParty, 
+    fetchProceedings, 
+    fetchComments, 
+    fetchParties, 
+    fetchCases, 
+    proceedings, 
+    comments, 
+    parties, 
+    cases,
+    selectedCase
+  ]);
+
   // ============================================
   // RENDER REFERENCE CASES
   // ============================================
@@ -1688,45 +1687,41 @@ useEffect(() => {
         onUpdate={handleUpdateCase}
       />
 
-      {/* ===== FIXED: CaseDetailModal - Only render when case exists ===== */}
-      {console.log('🔴🔴🔴 BEFORE MODAL - proceedings length:', proceedings.length)}
-      {console.log('🔴🔴🔴 BEFORE MODAL - selectedCase:', selectedCase)}
-
-      {selectedCase && (
-        <CaseDetailModal
-          key={modalKey}
-          isOpen={!!selectedCase}
-          case={selectedCase}
-          onClose={() => {
-            console.log('🔴 Closing case detail modal');
-            setSelectedCase(null);
-          }}
-          onStatusChange={updateCaseStatus}
-          onEdit={(caseItem) => {
-            handleEdit(caseItem);
-          }}
-          onDelete={deleteCase}
-          onDeleteComplete={() => {
-            setSelectedCase(null);
-          }}
-          onRefresh={handleRefresh}
-          // ===== PROCEEDINGS PROPS =====
-          proceedings={proceedings}
-          onAddProceeding={handleAddProceeding}
-          onUpdateProceeding={handleUpdateProceeding}
-          onDeleteProceeding={handleDeleteProceeding}
-          // ===== COMMENTS PROPS =====
-          comments={comments}
-          onAddComment={handleAddComment}
-          onUpdateComment={handleUpdateComment}
-          onDeleteComment={handleDeleteComment}
-          // ===== PARTIES PROPS =====
-          parties={parties}
-          onAddParty={handleAddParty}
-          onUpdateParty={handleUpdateParty}
-          onDeleteParty={handleDeleteParty}
-        />
-      )}
+      {/* ===== ✅ FIXED: CaseDetailModal - Always render, control with isOpen ===== */}
+      <CaseDetailModal
+        key={modalKey}
+        isOpen={!!selectedCase}
+        case={selectedCase}
+        onClose={() => {
+          console.log('🔴 Closing case detail modal');
+          setSelectedCase(null);
+        }}
+        onStatusChange={updateCaseStatus}
+        onEdit={(caseItem) => {
+          handleEdit(caseItem);
+        }}
+        onDelete={deleteCase}
+        onDeleteComplete={() => {
+          console.log('🔄 Delete complete - refreshing data');
+          setSelectedCase(null);
+        }}
+        onRefresh={handleRefresh}
+        // ===== PROCEEDINGS PROPS =====
+        proceedings={proceedings}
+        onAddProceeding={handleAddProceeding}
+        onUpdateProceeding={handleUpdateProceeding}
+        onDeleteProceeding={handleDeleteProceeding}
+        // ===== COMMENTS PROPS =====
+        comments={comments}
+        onAddComment={handleAddComment}
+        onUpdateComment={handleUpdateComment}
+        onDeleteComment={handleDeleteComment}
+        // ===== PARTIES PROPS =====
+        parties={parties}
+        onAddParty={handleAddParty}
+        onUpdateParty={handleUpdateParty}
+        onDeleteParty={handleDeleteParty}
+      />
 
       <AddReferenceModal
         isOpen={isAddReferenceModalOpen}

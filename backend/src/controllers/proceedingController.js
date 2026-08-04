@@ -3,6 +3,15 @@ import Proceeding from '../models/Proceeding.js';
 import Case from '../models/Case.js';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+// ✅ Get __dirname in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// ✅ Define the uploads directory path
+const UPLOADS_DIR = path.join(__dirname, '../uploads');
+const PROCEEDINGS_DIR = path.join(UPLOADS_DIR, 'proceedings');
 
 // ============================================
 // ✅ GET ALL PROCEEDINGS - FIXED
@@ -11,20 +20,16 @@ export const getAllProceedings = async (req, res) => {
   try {
     console.log('📋 Fetching all proceedings...');
     
-    // ✅ FIX: Don't populate caseId - keep it as string for frontend filtering
     const proceedings = await Proceeding.find()
       .sort({ createdAt: -1 });
 
     console.log(`✅ Found ${proceedings.length} proceedings`);
 
-    // Format the response - ensure caseId is a string
     const formattedData = proceedings.map(p => {
       const plain = p.toObject ? p.toObject() : p;
       return {
         ...plain,
-        // Ensure caseId is the string ID, not an object
         caseId: plain.caseId,
-        // Add a separate field for case details if needed
         caseDetails: plain.caseDetails || null
       };
     });
@@ -50,11 +55,9 @@ export const getProceedingsByCase = async (req, res) => {
     const { caseId } = req.params;
     console.log(`📋 Fetching proceedings for case: ${caseId}`);
 
-    // ✅ FIX: Don't populate caseId
     const proceedings = await Proceeding.find({ caseId })
       .sort({ createdAt: -1 });
 
-    // Format the response
     const formattedData = proceedings.map(p => {
       const plain = p.toObject ? p.toObject() : p;
       return {
@@ -133,7 +136,6 @@ export const createProceeding = async (req, res) => {
       date 
     } = req.body;
 
-    // Validate required fields
     if (!caseId) {
       return res.status(400).json({
         success: false,
@@ -141,7 +143,6 @@ export const createProceeding = async (req, res) => {
       });
     }
 
-    // Check if case exists
     const caseExists = await Case.findById(caseId);
     if (!caseExists) {
       return res.status(404).json({
@@ -150,9 +151,8 @@ export const createProceeding = async (req, res) => {
       });
     }
 
-    // Prepare proceeding data
     const proceedingData = {
-      caseId: caseId, // Keep as string
+      caseId: caseId,
       createdBy: createdBy || req.user?.name || 'Unknown User',
       progress: progress || '',
       nextHearingDate: nextHearingDate || null,
@@ -169,7 +169,6 @@ export const createProceeding = async (req, res) => {
     const proceeding = new Proceeding(proceedingData);
     await proceeding.save();
 
-    // ✅ FIX: Return the proceeding WITHOUT populating caseId
     const plainProceeding = proceeding.toObject ? proceeding.toObject() : proceeding;
     
     console.log('✅ Proceeding created:', plainProceeding);
@@ -178,7 +177,7 @@ export const createProceeding = async (req, res) => {
       success: true,
       data: {
         ...plainProceeding,
-        caseId: plainProceeding.caseId // Ensure caseId is the string
+        caseId: plainProceeding.caseId
       }
     });
   } catch (error) {
@@ -207,7 +206,6 @@ export const updateProceeding = async (req, res) => {
       });
     }
 
-    // Update only allowed fields
     const allowedFields = ['createdBy', 'progress', 'nextHearingDate', 'status', 'attachment', 'date', 'description'];
     allowedFields.forEach(field => {
       if (req.body[field] !== undefined) {
@@ -217,7 +215,6 @@ export const updateProceeding = async (req, res) => {
 
     await proceeding.save();
 
-    // ✅ FIX: Return without populating
     const plainProceeding = proceeding.toObject ? proceeding.toObject() : proceeding;
 
     console.log('✅ Proceeding updated:', plainProceeding);
@@ -272,7 +269,7 @@ export const deleteProceeding = async (req, res) => {
 };
 
 // ============================================
-// 📎 DOCUMENT HANDLERS
+// 📎 DOCUMENT HANDLERS - FIXED PATH
 // ============================================
 export const uploadDocument = async (req, res) => {
   try {
@@ -294,7 +291,6 @@ export const uploadDocument = async (req, res) => {
       });
     }
 
-    // Add document to the specified type array
     if (!proceeding.documents) {
       proceeding.documents = { petitioner: [], research: [], defendant: [] };
     }
@@ -353,7 +349,6 @@ export const deleteDocument = async (req, res) => {
       });
     }
 
-    // Remove document from array
     proceeding.documents[type].splice(docIndex, 1);
     await proceeding.save();
 
@@ -376,6 +371,9 @@ export const deleteDocument = async (req, res) => {
   }
 };
 
+// ============================================
+// ✅ VIEW DOCUMENT - FIXED PATH
+// ============================================
 export const viewDocument = async (req, res) => {
   try {
     const { id, type, index } = req.params;
@@ -405,15 +403,30 @@ export const viewDocument = async (req, res) => {
     }
 
     const filename = proceeding.documents[type][docIndex];
-    const filepath = path.join(process.cwd(), 'uploads', 'proceedings', filename);
+    
+    // ✅ FIXED: Use the correct path - same as in proceedingRoutes.js
+    const filepath = path.join(PROCEEDINGS_DIR, filename);
+    
+    console.log(`📁 Looking for file at: ${filepath}`);
 
     if (!fs.existsSync(filepath)) {
+      console.log(`❌ File not found: ${filepath}`);
+      // ✅ Try alternative path as fallback
+      const altPath = path.join(process.cwd(), 'uploads', 'proceedings', filename);
+      console.log(`🔄 Trying alternative path: ${altPath}`);
+      
+      if (fs.existsSync(altPath)) {
+        console.log(`✅ Found file at alternative path`);
+        return res.sendFile(altPath);
+      }
+      
       return res.status(404).json({
         success: false,
         error: 'File not found on server'
       });
     }
 
+    console.log(`✅ Sending file: ${filepath}`);
     res.sendFile(filepath);
   } catch (error) {
     console.error('❌ Error viewing document:', error);

@@ -1,5 +1,6 @@
 // src/hooks/useClients.js
 import { useState, useCallback, useEffect } from 'react';
+import { clientAPI } from '../api/clients';
 
 // ✅ FIX: Use relative URL for development with proxy
 // The proxy will forward /api to http://localhost:5000/api
@@ -13,6 +14,29 @@ export const useClients = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Helper to clean ID
+  const sanitizeId = (id) => {
+    console.log('🔍 sanitizeId received:', id, 'type:', typeof id);
+    
+    if (id === null || id === undefined || id === '') {
+      console.log('❌ ID is null/undefined/empty');
+      return null;
+    }
+    
+    if (typeof id === 'object') {
+      console.log('📝 ID is an object, extracting _id or id');
+      const objId = id._id || id.id || null;
+      console.log('📝 Extracted ID from object:', objId);
+      if (objId) {
+        return sanitizeId(objId);
+      }
+      console.log('❌ Object has no _id or id property');
+      return null;
+    }
+    
+    let clean = String(id);
+    clean = clean.replace(/["']/g, '');
+    clean = clean.trim();
   const getAuthHeader = () => {
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
     const headers = {
@@ -21,35 +45,26 @@ export const useClients = () => {
       'ngrok-skip-browser-warning': 'true',
     };
     
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+    if (!clean || clean === '' || clean === 'null' || clean === 'undefined') {
+      console.log('❌ ID is invalid after cleaning');
+      return null;
     }
     
-    return { headers };
+    console.log('✅ Valid clean ID:', clean);
+    return clean;
   };
 
   const fetchClients = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      console.log('👥 Fetching clients from:', `${API_URL}/clients`);
-      const response = await fetch(`${API_URL}/clients`, {
-        method: 'GET',
-        ...getAuthHeader(),
-      });
+      console.log('👥 Fetching clients...');
+      const response = await clientAPI.getAll();
+      console.log('👥 Response:', response);
 
-      console.log('👥 Response status:', response.status);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      console.log('👥 Response data:', data);
-
-      if (data.success && data.data) {
-        console.log('✅ Clients loaded:', data.data.length, 'clients');
-        const formattedClients = data.data.map(client => ({
+      if (response.success && response.data) {
+        console.log('✅ Clients loaded:', response.data.length, 'clients');
+        const formattedClients = response.data.map(client => ({
           ...client,
           id: client.id || client._id
         }));
@@ -57,12 +72,10 @@ export const useClients = () => {
         return { success: true, data: formattedClients };
       }
       
-      throw new Error(data.error || 'Failed to fetch clients');
+      throw new Error(response.error || 'Failed to fetch clients');
     } catch (err) {
       console.error('❌ Error fetching clients:', err);
       setError(err.message);
-      
-      // Use dummy data as fallback
       const dummyClients = getDummyClients();
       setClients(dummyClients);
       return { success: false, error: err.message, data: dummyClients };
@@ -81,26 +94,19 @@ export const useClients = () => {
     setError(null);
     try {
       console.log('👤 Adding new client:', clientData);
-      
-      const response = await fetch(`${API_URL}/clients`, {
-        method: 'POST',
-        ...getAuthHeader(),
-        body: JSON.stringify(clientData),
-      });
+      const response = await clientAPI.create(clientData);
+      console.log('👤 Add client response:', response);
 
-      const result = await response.json();
-      console.log('👤 Add client response:', result);
-
-      if (result.success && result.data) {
+      if (response.success && response.data) {
         const newClient = {
-          ...result.data,
-          id: result.data.id || result.data._id
+          ...response.data,
+          id: response.data.id || response.data._id
         };
         setClients(prev => [newClient, ...prev]);
         console.log('✅ Client added:', newClient);
         return { success: true, data: newClient };
       }
-      return { success: false, error: result.error || 'Failed to add client' };
+      return { success: false, error: response.error || 'Failed to add client' };
     } catch (err) {
       console.error('❌ Add client error:', err);
       return { success: false, error: err.message };
@@ -109,35 +115,106 @@ export const useClients = () => {
     }
   }, []);
 
+  // ✅ SIMPLIFIED FIXED: updateClient
   const updateClient = useCallback(async (id, updatedData) => {
+    console.log('📝 updateClient called with ID:', id);
+    console.log('📝 ID type:', typeof id);
+    console.log('📝 Updated data:', updatedData);
+    
+    // If ID is undefined/null, try to get it from updatedData
+    let finalId = id;
+    let finalData = updatedData;
+    
+    // If id is undefined/null and updatedData is an object with ID
+    if (!finalId && updatedData && typeof updatedData === 'object') {
+      finalId = updatedData._id || updatedData.id || updatedData.clientId || null;
+      finalData = updatedData;
+      console.log('📝 Found ID in updatedData object:', finalId);
+    }
+    
+    // If finalId is an object with ID
+    if (finalId && typeof finalId === 'object') {
+      finalId = finalId._id || finalId.id || null;
+      console.log('📝 Extracted ID from object:', finalId);
+    }
+    
+    const sanitizedId = sanitizeId(finalId);
+    
+    if (!sanitizedId) {
+      console.error('❌ Invalid client ID after sanitization');
+      return { success: false, error: 'Invalid client ID' };
+    }
+
+    console.log(`📝 Updating client with ID: "${sanitizedId}"`);
+    
     setLoading(true);
     setError(null);
+    
     try {
-      console.log(`📝 Updating client: ${id}`);
+      // Remove ID fields from data
+      const { _id, id: clientIdField, client_id, ...cleanData } = finalData || {};
       
-      const response = await fetch(`${API_URL}/clients/${id}`, {
-        method: 'PUT',
-        ...getAuthHeader(),
-        body: JSON.stringify(updatedData),
-      });
+      const payload = {
+        name: cleanData.name || '',
+        email: cleanData.email || '',
+        phone: cleanData.phone || '',
+        company: cleanData.company || '',
+        type: cleanData.type || 'Individual',
+        status: cleanData.status || 'active',
+        address: cleanData.address || '',
+        city: cleanData.city || '',
+        state: cleanData.state || '',
+        zipCode: cleanData.zipCode || '',
+        country: cleanData.country || '',
+        notes: cleanData.notes || '',
+        gst: cleanData.gst || '',
+        pan: cleanData.pan || '',
+        website: cleanData.website || '',
+        industry: cleanData.industry || '',
+      };
+      
+      console.log('📝 Request payload:', payload);
+      
+      // Call the API with the sanitized ID
+      const response = await clientAPI.update(sanitizedId, payload);
+      console.log('📝 Update response:', response);
 
-      const result = await response.json();
-      console.log('📝 Update client response:', result);
-
-      if (result.success && result.data) {
-        const updatedClient = {
-          ...result.data,
-          id: result.data.id || result.data._id
-        };
-        setClients(prev => prev.map(client => 
-          (client.id === id || client._id === id) ? updatedClient : client
-        ));
-        console.log('✅ Client updated:', updatedClient);
-        return { success: true, data: updatedClient };
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to update client');
       }
-      return { success: false, error: result.error || 'Failed to update client' };
+
+      // Get the updated client data
+      const updatedClient = response.data ? {
+        ...response.data,
+        id: response.data.id || response.data._id || sanitizedId,
+        _id: response.data._id || response.data.id || sanitizedId
+      } : {
+        ...payload,
+        id: sanitizedId,
+        _id: sanitizedId
+      };
+      
+      console.log('📝 Updated client data:', updatedClient);
+      
+      // ✅ Update the clients state - find and replace the updated client
+      setClients(prevClients => {
+        const updated = prevClients.map(client => {
+          const clientIdField = client.id || client._id;
+          if (clientIdField === sanitizedId) {
+            console.log('✅ Found and updating client:', client.name);
+            return { ...client, ...updatedClient };
+          }
+          return client;
+        });
+        console.log('📝 Updated clients state length:', updated.length);
+        return updated;
+      });
+      
+      console.log('✅ Client updated successfully:', updatedClient);
+      return { success: true, data: updatedClient };
     } catch (err) {
       console.error('❌ Update client error:', err);
+      setError(err.message);
       return { success: false, error: err.message };
     } finally {
       setLoading(false);
@@ -145,27 +222,38 @@ export const useClients = () => {
   }, []);
 
   const deleteClient = useCallback(async (id) => {
+    console.log('🗑️ deleteClient called with ID:', id);
+    
+    const sanitizedId = sanitizeId(id);
+    
+    if (!sanitizedId) {
+      console.error('❌ Invalid client ID for deletion');
+      return { success: false, error: 'Invalid client ID' };
+    }
+
+    console.log(`🗑️ Deleting client: "${sanitizedId}"`);
+    
     setLoading(true);
     setError(null);
+    
     try {
-      console.log(`🗑️ Deleting client: ${id}`);
-      
-      const response = await fetch(`${API_URL}/clients/${id}`, {
-        method: 'DELETE',
-        ...getAuthHeader(),
-      });
+      const response = await clientAPI.delete(sanitizedId);
+      console.log('🗑️ Delete response:', response);
 
-      const result = await response.json();
-      console.log('🗑️ Delete client response:', result);
-
-      if (result.success) {
-        setClients(prev => prev.filter(client => (client.id !== id && client._id !== id)));
-        console.log('✅ Client deleted:', id);
-        return { success: true };
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to delete client');
       }
-      return { success: false, error: result.error || 'Failed to delete client' };
+      
+      setClients(prev => prev.filter(client => {
+        const clientId = client.id || client._id;
+        return clientId !== sanitizedId;
+      }));
+      
+      console.log('✅ Client deleted:', sanitizedId);
+      return { success: true };
     } catch (err) {
       console.error('❌ Delete client error:', err);
+      setError(err.message);
       return { success: false, error: err.message };
     } finally {
       setLoading(false);

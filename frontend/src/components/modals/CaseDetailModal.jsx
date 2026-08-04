@@ -1,5 +1,5 @@
-// src/components/modals/CaseDetailModal.jsx - COMPLETE FIXED VERSION
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+// src/components/modals/CaseDetailModal.jsx - COMPLETE WITH PROFESSIONAL ATTACHMENTS
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { 
   FaTimes, 
   FaUser, 
@@ -57,7 +57,12 @@ import {
   FaFileVideo,
   FaFileCode,
   FaExternalLinkAlt,
-  FaPrint
+  FaPrint,
+  FaMinus,
+  FaPlus,
+  FaRedo,
+  FaCompress,
+  FaExpand
 } from 'react-icons/fa';
 import { GiScales, GiJusticeStar } from 'react-icons/gi';
 import toast from 'react-hot-toast';
@@ -79,13 +84,15 @@ const displayValue = (value, fallback = 'N/A') => {
 };
 
 // ============================================
-// VIEW ATTACHMENT MODAL - COMPLETE FIXED VERSION
+// VIEW ATTACHMENT MODAL - ENHANCED VERSION
 // ============================================
 const ViewAttachmentModal = ({ isOpen, onClose, attachment }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [fileContent, setFileContent] = useState(null);
   const [previewError, setPreviewError] = useState(false);
   const [fileBlobUrl, setFileBlobUrl] = useState(null);
+  const [pdfZoom, setPdfZoom] = useState(100);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Get file extension
   const getFileExtension = (filename) => {
@@ -95,20 +102,22 @@ const ViewAttachmentModal = ({ isOpen, onClose, attachment }) => {
   };
 
   // Get file icon based on extension
-  const getFileIcon = (filename) => {
+  const getFileIcon = (filename, size = '5xl') => {
     const ext = getFileExtension(filename);
+    const sizeClassMap = { xl: 'text-xl', '5xl': 'text-5xl' };
+    const className = sizeClassMap[size] || 'text-5xl';
     switch (ext) {
       case 'pdf':
-        return <FaFilePdf className="text-red-500 text-5xl" />;
+        return <FaFilePdf className={`text-red-500 ${className}`} />;
       case 'doc':
       case 'docx':
-        return <FaFileWord className="text-blue-500 text-5xl" />;
+        return <FaFileWord className={`text-blue-500 ${className}`} />;
       case 'xls':
       case 'xlsx':
-        return <FaFileExcel className="text-green-500 text-5xl" />;
+        return <FaFileExcel className={`text-green-500 ${className}`} />;
       case 'ppt':
       case 'pptx':
-        return <FaFilePowerpoint className="text-orange-500 text-5xl" />;
+        return <FaFilePowerpoint className={`text-orange-500 ${className}`} />;
       case 'jpg':
       case 'jpeg':
       case 'png':
@@ -116,20 +125,20 @@ const ViewAttachmentModal = ({ isOpen, onClose, attachment }) => {
       case 'bmp':
       case 'svg':
       case 'webp':
-        return <FaFileImage className="text-purple-500 text-5xl" />;
+        return <FaFileImage className={`text-purple-500 ${className}`} />;
       case 'zip':
       case 'rar':
       case '7z':
-        return <FaFileArchive className="text-yellow-500 text-5xl" />;
+        return <FaFileArchive className={`text-yellow-500 ${className}`} />;
       case 'mp3':
       case 'wav':
       case 'aac':
-        return <FaFileAudio className="text-pink-500 text-5xl" />;
+        return <FaFileAudio className={`text-pink-500 ${className}`} />;
       case 'mp4':
       case 'avi':
       case 'mov':
       case 'mkv':
-        return <FaFileVideo className="text-indigo-500 text-5xl" />;
+        return <FaFileVideo className={`text-indigo-500 ${className}`} />;
       case 'js':
       case 'css':
       case 'html':
@@ -137,9 +146,9 @@ const ViewAttachmentModal = ({ isOpen, onClose, attachment }) => {
       case 'xml':
       case 'txt':
       case 'md':
-        return <FaFileCode className="text-gray-500 text-5xl" />;
+        return <FaFileCode className={`text-gray-500 ${className}`} />;
       default:
-        return <FaFileAlt className="text-gray-400 text-5xl" />;
+        return <FaFileAlt className={`text-gray-400 ${className}`} />;
     }
   };
 
@@ -189,36 +198,29 @@ const ViewAttachmentModal = ({ isOpen, onClose, attachment }) => {
     }
   };
 
-  // Check if file is an image that can be previewed
+  // Check file types
   const isPreviewableImage = (filename) => {
     const ext = getFileExtension(filename);
     return ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 'webp'].includes(ext);
   };
 
-  // Check if file is a PDF that can be previewed
-  const isPDF = (filename) => {
-    return getFileExtension(filename) === 'pdf';
-  };
-
-  // Check if file is a text file that can be previewed
+  const isPDF = (filename) => getFileExtension(filename) === 'pdf';
+  
   const isTextFile = (filename) => {
     const ext = getFileExtension(filename);
     return ['txt', 'json', 'xml', 'html', 'css', 'js', 'md', 'csv'].includes(ext);
   };
-
-  // Check if file is a video
+  
   const isVideo = (filename) => {
     const ext = getFileExtension(filename);
     return ['mp4', 'avi', 'mov', 'mkv', 'webm', 'flv', 'wmv'].includes(ext);
   };
-
-  // Check if file is an audio file
+  
   const isAudio = (filename) => {
     const ext = getFileExtension(filename);
     return ['mp3', 'wav', 'aac', 'flac', 'ogg', 'wma'].includes(ext);
   };
-
-  // Check if file is an office document
+  
   const isOfficeDocument = (filename) => {
     const ext = getFileExtension(filename);
     return ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext);
@@ -239,15 +241,16 @@ const ViewAttachmentModal = ({ isOpen, onClose, attachment }) => {
       return url;
     }
     
-    if (attachment.fileName) {
-      if (attachment.fileName.startsWith('/uploads/') || attachment.fileName.startsWith('uploads/')) {
-        return attachment.fileName.startsWith('/') ? attachment.fileName : `/${attachment.fileName}`;
-      }
-      return `/uploads/${attachment.fileName}`;
+    const fileName = attachment.fileName || attachment.name || '';
+    
+    if (fileName) {
+      const cleanFileName = fileName.split('/').pop();
+      return `http://localhost:5000/uploads/${cleanFileName}`;
     }
     
     if (url) {
-      return url.startsWith('/') ? url : `/${url}`;
+      const cleanUrl = url.startsWith('/') ? url.slice(1) : url;
+      return `http://localhost:5000/${cleanUrl}`;
     }
     
     return null;
@@ -268,40 +271,22 @@ const ViewAttachmentModal = ({ isOpen, onClose, attachment }) => {
     try {
       setIsLoading(true);
       
-      if (attachmentUrl && (attachmentUrl.startsWith('http://') || attachmentUrl.startsWith('https://'))) {
-        if (isPDF(attachment.fileName)) {
-          const response = await fetch(attachmentUrl);
-          if (!response.ok) throw new Error('Failed to fetch file');
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = attachment.fileName || 'document.pdf';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          window.URL.revokeObjectURL(url);
-          toast.success('Download started!');
-        } else {
-          window.open(attachmentUrl, '_blank');
-        }
-        setIsLoading(false);
-        return;
+      let downloadUrl = attachmentUrl;
+      
+      if (!downloadUrl || downloadUrl.startsWith('/')) {
+        const fileName = attachment.fileName || attachment.name || 'file';
+        const cleanFileName = fileName.split('/').pop();
+        downloadUrl = `http://localhost:5000/uploads/${cleanFileName}`;
       }
-
-      if (attachmentUrl && attachmentUrl.startsWith('data:')) {
-        const link = document.createElement('a');
-        link.href = attachmentUrl;
-        link.download = attachment.fileName || 'download.pdf';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        toast.success('Download started!');
-        setIsLoading(false);
-        return;
-      }
-
-      const response = await fetch(attachmentUrl || `/uploads/${attachment.fileName}`);
+      
+      const response = await fetch(downloadUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/octet-stream, */*',
+        },
+        mode: 'cors',
+        credentials: 'include',
+      });
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -311,15 +296,17 @@ const ViewAttachmentModal = ({ isOpen, onClose, attachment }) => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = attachment.fileName || 'download';
+      a.download = attachment.fileName || attachment.name || 'download';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      
+      setTimeout(() => window.URL.revokeObjectURL(url), 10000);
+      
       toast.success('Download started!');
     } catch (error) {
       console.error('Download error:', error);
-      toast.error('Failed to download file. Please try again.');
+      toast.error('Failed to download file: ' + error.message);
     } finally {
       setIsLoading(false);
     }
@@ -381,20 +368,13 @@ const ViewAttachmentModal = ({ isOpen, onClose, attachment }) => {
                 .content { max-width: 800px; margin: 0 auto; }
                 img { max-width: 100%; }
                 pre { white-space: pre-wrap; word-wrap: break-word; }
-                .header { border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
-                .file-info { background: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
               </style>
             </head>
             <body>
               <div class="content">
-                <div class="header">
-                  <h2>${attachment.fileName || 'Document'}</h2>
-                  <p><strong>Type:</strong> ${getFileType(attachment.fileName)}</p>
-                  <p><strong>Size:</strong> ${getFileSize(attachment.fileSize)}</p>
-                </div>
-                <div class="file-info">
-                  ${printContent.innerHTML}
-                </div>
+                <h2>${attachment.fileName || 'Document'}</h2>
+                <hr/>
+                ${printContent.innerHTML}
               </div>
             </body>
           </html>
@@ -410,7 +390,17 @@ const ViewAttachmentModal = ({ isOpen, onClose, attachment }) => {
     setPreviewError(true);
   };
 
-  // Load file content for text files - ALWAYS CALLED (hook order fixed)
+  // Toggle fullscreen
+  const toggleFullscreen = () => {
+    setIsFullscreen(!isFullscreen);
+  };
+
+  // Zoom controls
+  const zoomIn = () => setPdfZoom(Math.min(200, pdfZoom + 10));
+  const zoomOut = () => setPdfZoom(Math.max(50, pdfZoom - 10));
+  const resetZoom = () => setPdfZoom(100);
+
+  // Load file content for text files
   useEffect(() => {
     const loadTextFile = async () => {
       if (!isOpen || !attachmentUrl || !isTextFile(attachment?.fileName)) {
@@ -433,7 +423,7 @@ const ViewAttachmentModal = ({ isOpen, onClose, attachment }) => {
     loadTextFile();
   }, [isOpen, attachmentUrl, attachment?.fileName]);
 
-  // Cleanup blob URLs - ALWAYS CALLED (hook order fixed)
+  // Cleanup blob URLs
   useEffect(() => {
     return () => {
       if (fileBlobUrl) {
@@ -442,22 +432,24 @@ const ViewAttachmentModal = ({ isOpen, onClose, attachment }) => {
     };
   }, [fileBlobUrl]);
 
-  // Early return AFTER all hooks are called
   if (!isOpen || !attachment) return null;
 
   return (
     <>
-      <div className="fixed inset-0 z-[200] bg-[#1B262C]/80 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl max-w-5xl w-full max-h-[92vh] overflow-hidden shadow-2xl animate-in zoom-in duration-200 border border-[#3282B8]/20">
+      <div 
+        className={`fixed inset-0 z-[200] bg-[#1B262C]/80 backdrop-blur-sm transition-all duration-300 ${isFullscreen ? 'bg-[#1B262C]/95' : ''}`} 
+        onClick={onClose} 
+      />
+      <div className={`fixed inset-0 z-[200] flex items-center justify-center p-4 transition-all duration-300 ${isFullscreen ? 'p-0' : ''}`}>
+        <div className={`bg-white rounded-3xl shadow-2xl animate-in zoom-in duration-200 border border-[#3282B8]/20 flex flex-col ${isFullscreen ? 'w-full h-full rounded-none max-w-none' : 'max-w-5xl w-full max-h-[92vh]'}`}>
           
-          {/* Header */}
+          {/* Header - Enhanced */}
           <div className="relative bg-gradient-to-r from-[#0F4C75] to-[#3282B8] px-6 py-4 rounded-t-3xl flex-shrink-0">
             <div className="absolute inset-0 bg-white/5 rounded-t-3xl"></div>
             <div className="relative flex items-start justify-between">
               <div className="flex items-center gap-3 min-w-0 flex-1">
                 <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg flex-shrink-0">
-                  <FaEye className="text-xl text-white" />
+                  {getFileIcon(attachment.fileName, 'xl')}
                 </div>
                 <div className="min-w-0 flex-1">
                   <h3 className="text-lg font-bold text-white truncate">{attachment.fileName || 'File Preview'}</h3>
@@ -465,146 +457,109 @@ const ViewAttachmentModal = ({ isOpen, onClose, attachment }) => {
                     <span>{getFileType(attachment.fileName)}</span>
                     <span>•</span>
                     <span>{getFileSize(attachment.fileSize)}</span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1">
+                      <FaFile className="text-[10px]" />
+                      {getFileExtension(attachment.fileName).toUpperCase() || 'FILE'}
+                    </span>
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+              <div className="flex items-center gap-1 flex-shrink-0 ml-2">
                 {attachmentUrl && (
                   <>
-                    <button
-                      onClick={handleDownload}
-                      disabled={isLoading}
-                      className="p-2 text-white/60 hover:text-white hover:bg-white/20 rounded-xl transition-all duration-200"
-                      title="Download"
-                      type="button"
-                    >
+                    {isPDF(attachment.fileName) && (
+                      <>
+                        <button onClick={zoomOut} className="p-2 text-white/60 hover:text-white hover:bg-white/20 rounded-xl transition-all duration-200" title="Zoom Out" type="button">
+                          <FaMinus className="text-lg" />
+                        </button>
+                        <span className="text-white/80 text-xs font-medium min-w-[40px] text-center">{pdfZoom}%</span>
+                        <button onClick={zoomIn} className="p-2 text-white/60 hover:text-white hover:bg-white/20 rounded-xl transition-all duration-200" title="Zoom In" type="button">
+                          <FaPlus className="text-lg" />
+                        </button>
+                        <button onClick={resetZoom} className="p-2 text-white/60 hover:text-white hover:bg-white/20 rounded-xl transition-all duration-200" title="Reset Zoom" type="button">
+                          <FaRedo className="text-lg" />
+                        </button>
+                        <div className="w-px h-8 bg-white/20 mx-1"></div>
+                      </>
+                    )}
+                    <button onClick={handleDownload} disabled={isLoading} className="p-2 text-white/60 hover:text-white hover:bg-white/20 rounded-xl transition-all duration-200" title="Download" type="button">
                       {isLoading ? <FaSpinner className="animate-spin text-sm" /> : <FaDownload className="text-lg" />}
                     </button>
-                    <button
-                      onClick={handlePrint}
-                      className="p-2 text-white/60 hover:text-white hover:bg-white/20 rounded-xl transition-all duration-200"
-                      title="Print"
-                      type="button"
-                    >
+                    <button onClick={handlePrint} className="p-2 text-white/60 hover:text-white hover:bg-white/20 rounded-xl transition-all duration-200" title="Print" type="button">
                       <FaPrint className="text-lg" />
                     </button>
-                    <button
-                      onClick={handleOpenInNewTab}
-                      className="p-2 text-white/60 hover:text-white hover:bg-white/20 rounded-xl transition-all duration-200"
-                      title="Open in new tab"
-                      type="button"
-                    >
+                    <button onClick={handleOpenInNewTab} className="p-2 text-white/60 hover:text-white hover:bg-white/20 rounded-xl transition-all duration-200" title="Open in new tab" type="button">
                       <FaExternalLinkAlt className="text-lg" />
+                    </button>
+                    <button onClick={toggleFullscreen} className="p-2 text-white/60 hover:text-white hover:bg-white/20 rounded-xl transition-all duration-200" title="Fullscreen" type="button">
+                      {isFullscreen ? <FaCompress className="text-lg" /> : <FaExpand className="text-lg" />}
+                    </button>
+                    <div className="w-px h-8 bg-white/20 mx-1"></div>
+                    <button onClick={onClose} className="p-2 text-white/60 hover:text-white hover:bg-white/20 rounded-xl transition-all duration-200" title="Close" type="button">
+                      <FaTimes className="text-xl" />
                     </button>
                   </>
                 )}
-                <button
-                  onClick={onClose}
-                  className="p-2 text-white/60 hover:text-white hover:bg-white/20 rounded-xl transition-all duration-200"
-                  type="button"
-                >
-                  <FaTimes className="text-xl" />
-                </button>
+                {!attachmentUrl && (
+                  <button onClick={onClose} className="p-2 text-white/60 hover:text-white hover:bg-white/20 rounded-xl transition-all duration-200" title="Close" type="button">
+                    <FaTimes className="text-xl" />
+                  </button>
+                )}
               </div>
             </div>
           </div>
 
           {/* Content */}
-          <div className="p-6 overflow-y-auto max-h-[calc(92vh-80px)]">
-            {/* File Preview */}
-            <div className="bg-[#F8FAFC] rounded-xl p-4 border border-[#BBE1FA]/30 min-h-[300px] flex items-center justify-center" id="attachment-content">
+          <div className={`p-6 overflow-y-auto flex-1 ${isFullscreen ? 'max-h-none' : 'max-h-[calc(92vh-80px)]'}`}>
+            <div className={`bg-[#F8FAFC] rounded-xl p-4 border border-[#BBE1FA]/30 min-h-[350px] flex items-center justify-center ${isFullscreen ? 'min-h-[70vh]' : ''}`} id="attachment-content">
               {attachmentUrl ? (
                 <>
-                  {/* Image Preview */}
                   {isPreviewableImage(attachment.fileName) && (
                     <div className="flex flex-col items-center gap-4 w-full">
                       {!previewError ? (
                         <img 
                           src={attachmentUrl} 
-                          alt={attachment.fileName}
-                          className="max-w-full max-h-[500px] object-contain rounded-lg shadow-md"
+                          alt={attachment.fileName} 
+                          className={`max-w-full object-contain rounded-lg shadow-md ${isFullscreen ? 'max-h-[70vh]' : 'max-h-[550px]'}`}
                           onError={handleImageError}
                         />
                       ) : (
                         <div className="flex flex-col items-center gap-4 py-8">
                           <div className="text-6xl">{getFileIcon(attachment.fileName)}</div>
                           <p className="text-[#6B7280]">Unable to preview image</p>
-                          <div className="flex gap-3">
-                            <button
-                              onClick={handleDownload}
-                              className="px-4 py-2 bg-gradient-to-r from-[#0F4C75] to-[#3282B8] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all duration-200 flex items-center gap-2"
-                              type="button"
-                            >
-                              <FaDownload className="text-xs" />
-                              Download
-                            </button>
-                            <button
-                              onClick={handleOpenInNewTab}
-                              className="px-4 py-2 bg-[#F0F4F8] text-[#1B262C] rounded-xl text-sm font-medium hover:bg-[#BBE1FA]/50 transition-all duration-200 flex items-center gap-2"
-                              type="button"
-                            >
-                              <FaExternalLinkAlt className="text-xs" />
-                              Open in New Tab
-                            </button>
-                          </div>
+                          <button onClick={handleDownload} className="px-4 py-2 bg-gradient-to-r from-[#0F4C75] to-[#3282B8] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all duration-200 flex items-center gap-2" type="button">
+                            <FaDownload className="text-xs" /> Download
+                          </button>
                         </div>
                       )}
                     </div>
                   )}
 
-                  {/* PDF Preview */}
                   {isPDF(attachment.fileName) && (
-                    <div className="w-full h-[600px] flex flex-col">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm text-[#6B7280]">PDF Document Preview</span>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={handleDownload}
-                            className="px-3 py-1.5 text-xs font-medium bg-gradient-to-r from-[#0F4C75] to-[#3282B8] text-white rounded-lg hover:shadow-lg transition-all duration-200 flex items-center gap-1"
-                            type="button"
-                          >
-                            <FaDownload className="text-xs" /> Download
-                          </button>
-                          <button
-                            onClick={handleOpenInNewTab}
-                            className="px-3 py-1.5 text-xs font-medium bg-[#F0F4F8] text-[#1B262C] rounded-lg hover:bg-[#BBE1FA]/50 transition-all duration-200 flex items-center gap-1"
-                            type="button"
-                          >
-                            <FaExternalLinkAlt className="text-xs" /> Open
-                          </button>
+                    <div className={`w-full flex flex-col ${isFullscreen ? 'h-[70vh]' : 'h-[600px]'}`}>
+                      <div className="flex-1 rounded-lg border border-[#BBE1FA]/30 overflow-hidden bg-[#F0F4F8]">
+                        <iframe 
+                          src={`${attachmentUrl}#toolbar=1&navpanes=1&scrollbar=1&view=FitH`} 
+                          className="w-full h-full" 
+                          title="PDF Preview"
+                          style={{ border: 'none', transform: `scale(${pdfZoom / 100})`, transformOrigin: 'top left' }}
+                          onLoad={() => setIsLoading(false)}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between mt-2 px-2">
+                        <span className="text-xs text-[#6B7280]">📄 PDF Document</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-[#6B7280]">{pdfZoom}% zoom</span>
+                          <span className="text-xs text-[#6B7280]">Page 1 of 1</span>
                         </div>
                       </div>
-                      <iframe
-                        src={attachmentUrl.startsWith('data:') ? attachmentUrl : `${attachmentUrl}#toolbar=1&navpanes=1`}
-                        className="w-full h-full rounded-lg border border-[#BBE1FA]/30"
-                        title="PDF Preview"
-                      />
                     </div>
                   )}
 
-                  {/* Text File Preview */}
                   {isTextFile(attachment.fileName) && (
                     <div className="w-full">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm text-[#6B7280]">Text Document Preview</span>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={handleDownload}
-                            className="px-3 py-1.5 text-xs font-medium bg-gradient-to-r from-[#0F4C75] to-[#3282B8] text-white rounded-lg hover:shadow-lg transition-all duration-200 flex items-center gap-1"
-                            type="button"
-                          >
-                            <FaDownload className="text-xs" /> Download
-                          </button>
-                          <button
-                            onClick={handleOpenInNewTab}
-                            className="px-3 py-1.5 text-xs font-medium bg-[#F0F4F8] text-[#1B262C] rounded-lg hover:bg-[#BBE1FA]/50 transition-all duration-200 flex items-center gap-1"
-                            type="button"
-                          >
-                            <FaExternalLinkAlt className="text-xs" /> Open
-                          </button>
-                        </div>
-                      </div>
-                      <div className="bg-white rounded-lg border border-[#BBE1FA]/30 p-4 max-h-[500px] overflow-auto">
+                      <div className="bg-white rounded-lg border border-[#BBE1FA]/30 p-4 max-h-[550px] overflow-auto">
                         <pre className="text-sm text-[#1B262C] whitespace-pre-wrap font-mono">
                           {fileContent || 'Loading file content...'}
                         </pre>
@@ -612,103 +567,34 @@ const ViewAttachmentModal = ({ isOpen, onClose, attachment }) => {
                     </div>
                   )}
 
-                  {/* Video Preview */}
                   {isVideo(attachment.fileName) && (
-                    <div className="w-full">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm text-[#6B7280]">Video Preview</span>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={handleDownload}
-                            className="px-3 py-1.5 text-xs font-medium bg-gradient-to-r from-[#0F4C75] to-[#3282B8] text-white rounded-lg hover:shadow-lg transition-all duration-200 flex items-center gap-1"
-                            type="button"
-                          >
-                            <FaDownload className="text-xs" /> Download
-                          </button>
-                          <button
-                            onClick={handleOpenInNewTab}
-                            className="px-3 py-1.5 text-xs font-medium bg-[#F0F4F8] text-[#1B262C] rounded-lg hover:bg-[#BBE1FA]/50 transition-all duration-200 flex items-center gap-1"
-                            type="button"
-                          >
-                            <FaExternalLinkAlt className="text-xs" /> Open
-                          </button>
-                        </div>
-                      </div>
-                      <video 
-                        controls 
-                        className="w-full rounded-lg border border-[#BBE1FA]/30 max-h-[500px]"
-                        src={attachmentUrl}
-                      >
-                        Your browser does not support the video tag.
-                      </video>
-                    </div>
+                    <video 
+                      controls 
+                      className={`w-full rounded-lg border border-[#BBE1FA]/30 ${isFullscreen ? 'max-h-[70vh]' : 'max-h-[550px]'}`} 
+                      src={attachmentUrl}
+                    >
+                      Your browser does not support the video tag.
+                    </video>
                   )}
 
-                  {/* Audio Preview */}
                   {isAudio(attachment.fileName) && (
-                    <div className="w-full">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm text-[#6B7280]">Audio Preview</span>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={handleDownload}
-                            className="px-3 py-1.5 text-xs font-medium bg-gradient-to-r from-[#0F4C75] to-[#3282B8] text-white rounded-lg hover:shadow-lg transition-all duration-200 flex items-center gap-1"
-                            type="button"
-                          >
-                            <FaDownload className="text-xs" /> Download
-                          </button>
-                          <button
-                            onClick={handleOpenInNewTab}
-                            className="px-3 py-1.5 text-xs font-medium bg-[#F0F4F8] text-[#1B262C] rounded-lg hover:bg-[#BBE1FA]/50 transition-all duration-200 flex items-center gap-1"
-                            type="button"
-                          >
-                            <FaExternalLinkAlt className="text-xs" /> Open
-                          </button>
-                        </div>
-                      </div>
-                      <audio 
-                        controls 
-                        className="w-full rounded-lg"
-                        src={attachmentUrl}
-                      >
-                        Your browser does not support the audio tag.
-                      </audio>
-                    </div>
+                    <audio controls className="w-full rounded-lg" src={attachmentUrl}>
+                      Your browser does not support the audio tag.
+                    </audio>
                   )}
 
-                  {/* Office Document - Open in new tab */}
                   {isOfficeDocument(attachment.fileName) && (
                     <div className="flex flex-col items-center gap-4 py-8">
                       <div className="text-6xl">{getFileIcon(attachment.fileName)}</div>
                       <h4 className="text-lg font-semibold text-[#1B262C]">{attachment.fileName}</h4>
-                      <p className="text-[#6B7280] text-center max-w-md">
-                        {getFileType(attachment.fileName)} - {getFileSize(attachment.fileSize)}
-                      </p>
-                      <p className="text-sm text-[#9CA3AF] text-center">
-                        Office documents can be viewed by downloading the file.
-                      </p>
-                      <div className="flex gap-3">
-                        <button
-                          onClick={handleDownload}
-                          className="px-4 py-2 bg-gradient-to-r from-[#0F4C75] to-[#3282B8] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all duration-200 flex items-center gap-2"
-                          type="button"
-                        >
-                          <FaDownload className="text-xs" />
-                          Download
-                        </button>
-                        <button
-                          onClick={handleOpenInNewTab}
-                          className="px-4 py-2 bg-[#F0F4F8] text-[#1B262C] rounded-xl text-sm font-medium hover:bg-[#BBE1FA]/50 transition-all duration-200 flex items-center gap-2"
-                          type="button"
-                        >
-                          <FaExternalLinkAlt className="text-xs" />
-                          Open in New Tab
-                        </button>
-                      </div>
+                      <p className="text-[#6B7280] text-center max-w-md">{getFileType(attachment.fileName)} - {getFileSize(attachment.fileSize)}</p>
+                      <p className="text-sm text-[#9CA3AF] text-center">Office documents can be viewed by downloading the file.</p>
+                      <button onClick={handleDownload} className="px-4 py-2 bg-gradient-to-r from-[#0F4C75] to-[#3282B8] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all duration-200 flex items-center gap-2" type="button">
+                        <FaDownload className="text-xs" /> Download
+                      </button>
                     </div>
                   )}
 
-                  {/* Fallback for unsupported files */}
                   {!isPreviewableImage(attachment.fileName) && 
                    !isPDF(attachment.fileName) && 
                    !isTextFile(attachment.fileName) && 
@@ -718,30 +604,11 @@ const ViewAttachmentModal = ({ isOpen, onClose, attachment }) => {
                     <div className="flex flex-col items-center gap-4 py-8">
                       <div className="text-6xl">{getFileIcon(attachment.fileName)}</div>
                       <h4 className="text-lg font-semibold text-[#1B262C]">{attachment.fileName}</h4>
-                      <p className="text-[#6B7280] text-center">
-                        {getFileType(attachment.fileName)} - {getFileSize(attachment.fileSize)}
-                      </p>
-                      <p className="text-sm text-[#9CA3AF] text-center">
-                        Preview not available for this file type.
-                      </p>
-                      <div className="flex gap-3">
-                        <button
-                          onClick={handleDownload}
-                          className="px-4 py-2 bg-gradient-to-r from-[#0F4C75] to-[#3282B8] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all duration-200 flex items-center gap-2"
-                          type="button"
-                        >
-                          <FaDownload className="text-xs" />
-                          Download
-                        </button>
-                        <button
-                          onClick={handleOpenInNewTab}
-                          className="px-4 py-2 bg-[#F0F4F8] text-[#1B262C] rounded-xl text-sm font-medium hover:bg-[#BBE1FA]/50 transition-all duration-200 flex items-center gap-2"
-                          type="button"
-                        >
-                          <FaExternalLinkAlt className="text-xs" />
-                          Open in New Tab
-                        </button>
-                      </div>
+                      <p className="text-[#6B7280] text-center">{getFileType(attachment.fileName)} - {getFileSize(attachment.fileSize)}</p>
+                      <p className="text-sm text-[#9CA3AF] text-center">Preview not available for this file type.</p>
+                      <button onClick={handleDownload} className="px-4 py-2 bg-gradient-to-r from-[#0F4C75] to-[#3282B8] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all duration-200 flex items-center gap-2" type="button">
+                        <FaDownload className="text-xs" /> Download
+                      </button>
                     </div>
                   )}
                 </>
@@ -754,30 +621,40 @@ const ViewAttachmentModal = ({ isOpen, onClose, attachment }) => {
               )}
             </div>
 
-            {/* File Details */}
-            <div className="mt-4 bg-[#F8FAFC] rounded-xl p-4 border border-[#BBE1FA]/30">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                  <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-semibold">File Name</p>
-                  <p className="text-sm font-medium text-[#1B262C] break-all">{attachment.fileName || 'N/A'}</p>
+            {/* File Info */}
+            <div className="mt-4 bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-xl p-4 border border-[#BBE1FA]/30">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-white rounded-lg p-3 shadow-sm border border-[#BBE1FA]/20">
+                  <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-semibold flex items-center gap-1">
+                    <FaFileAlt className="text-[#3282B8] text-xs" /> File Name
+                  </p>
+                  <p className="text-sm font-medium text-[#1B262C] break-all mt-1">{attachment.fileName || 'N/A'}</p>
                 </div>
-                <div>
-                  <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-semibold">File Type</p>
-                  <p className="text-sm font-medium text-[#1B262C]">{getFileType(attachment.fileName)}</p>
+                <div className="bg-white rounded-lg p-3 shadow-sm border border-[#BBE1FA]/20">
+                  <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-semibold flex items-center gap-1">
+                    <FaFilePdf className="text-red-500 text-xs" /> File Type
+                  </p>
+                  <p className="text-sm font-medium text-[#1B262C] mt-1">{getFileType(attachment.fileName)}</p>
                 </div>
-                <div>
-                  <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-semibold">File Size</p>
-                  <p className="text-sm font-medium text-[#1B262C]">{getFileSize(attachment.fileSize)}</p>
+                <div className="bg-white rounded-lg p-3 shadow-sm border border-[#BBE1FA]/20">
+                  <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-semibold flex items-center gap-1">
+                    <FaDownload className="text-[#0F4C75] text-xs" /> File Size
+                  </p>
+                  <p className="text-sm font-medium text-[#1B262C] mt-1">{getFileSize(attachment.fileSize)}</p>
                 </div>
-                <div>
-                  <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-semibold">Extension</p>
-                  <p className="text-sm font-medium text-[#1B262C] uppercase">{getFileExtension(attachment.fileName) || 'N/A'}</p>
+                <div className="bg-white rounded-lg p-3 shadow-sm border border-[#BBE1FA]/20">
+                  <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-semibold flex items-center gap-1">
+                    <FaFileCode className="text-[#F59E0B] text-xs" /> Extension
+                  </p>
+                  <p className="text-sm font-medium text-[#1B262C] uppercase mt-1">{getFileExtension(attachment.fileName) || 'N/A'}</p>
                 </div>
               </div>
               {attachment.description && (
                 <div className="mt-3 pt-3 border-t border-[#BBE1FA]/30">
-                  <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-semibold">Description</p>
-                  <p className="text-sm text-[#1B262C]">{attachment.description}</p>
+                  <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-semibold flex items-center gap-1">
+                    <FaInfoCircle className="text-[#3282B8] text-xs" /> Description
+                  </p>
+                  <p className="text-sm text-[#1B262C] mt-1 bg-white rounded-lg p-2 border border-[#BBE1FA]/20">{attachment.description}</p>
                 </div>
               )}
             </div>
@@ -786,12 +663,7 @@ const ViewAttachmentModal = ({ isOpen, onClose, attachment }) => {
             <div className="flex items-center justify-end gap-3 mt-4 pt-4 border-t border-[#BBE1FA]/30">
               {attachmentUrl && (
                 <>
-                  <button
-                    onClick={handleDownload}
-                    disabled={isLoading}
-                    className="px-4 py-2 bg-gradient-to-r from-[#0F4C75] to-[#3282B8] text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-[#0F4C75]/25 transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    type="button"
-                  >
+                  <button onClick={handleDownload} disabled={isLoading} className="px-4 py-2 bg-gradient-to-r from-[#0F4C75] to-[#3282B8] text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-[#0F4C75]/25 transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed" type="button">
                     {isLoading ? (
                       <>
                         <FaSpinner className="animate-spin text-xs" />
@@ -804,21 +676,13 @@ const ViewAttachmentModal = ({ isOpen, onClose, attachment }) => {
                       </>
                     )}
                   </button>
-                  <button
-                    onClick={handleOpenInNewTab}
-                    className="px-4 py-2 bg-[#F0F4F8] text-[#1B262C] rounded-xl text-sm font-medium hover:bg-[#BBE1FA]/50 transition-all duration-200 flex items-center gap-2"
-                    type="button"
-                  >
+                  <button onClick={handleOpenInNewTab} className="px-4 py-2 bg-[#F0F4F8] text-[#1B262C] rounded-xl text-sm font-medium hover:bg-[#BBE1FA]/50 transition-all duration-200 flex items-center gap-2" type="button">
                     <FaExternalLinkAlt className="text-xs" />
                     Open in New Tab
                   </button>
                 </>
               )}
-              <button
-                onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-[#6B7280] hover:text-[#1B262C] hover:bg-[#F0F4F8] rounded-xl transition-all duration-200"
-                type="button"
-              >
+              <button onClick={onClose} className="px-4 py-2 text-sm font-medium text-[#6B7280] hover:text-[#1B262C] hover:bg-[#F0F4F8] rounded-xl transition-all duration-200" type="button">
                 Close
               </button>
             </div>
@@ -1618,7 +1482,7 @@ const DeleteConfirmModal = ({ isOpen, onClose, onConfirm, title, message }) => {
 // ============================================
 const CaseDetailModal = ({ 
   isOpen, 
-  case: caseItem, 
+  case: caseItemProp, 
   onClose, 
   onStatusChange, 
   onEdit,
@@ -1642,6 +1506,41 @@ const CaseDetailModal = ({
   const [activeTab, setActiveTab] = useState('details');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // ============================================
+  // ✅ FIX (root cause of modal closing / "back to main screen"):
+  // The modal used to render straight off the `case` prop. If the parent
+  // re-fetches its case list after an add/edit/delete and briefly renders
+  // this modal with `case` temporarily undefined/null (very common with
+  // React Query / useState-based lists mid-refetch), the guard
+  //   if (!isOpen || !caseItem) return null;
+  // would unmount the ENTIRE modal even though `isOpen` was still true.
+  // That is what looked like "goes back to main screen".
+  //
+  // Fix: keep an internal snapshot of the case that only updates when a
+  // valid (truthy) case comes in from the parent. A transient falsy value
+  // from the parent no longer collapses the modal — only an explicit
+  // isOpen=false (real close) does.
+  // ============================================
+  const [internalCaseItem, setInternalCaseItem] = useState(caseItemProp);
+
+  useEffect(() => {
+    if (caseItemProp) {
+      setInternalCaseItem(caseItemProp);
+    }
+  }, [caseItemProp]);
+
+  // Everything below keeps using `caseItem` exactly as before — no other
+  // reference changes are required anywhere else in the file.
+  const caseItem = internalCaseItem;
+  
+  // ✅ CHANGE 1: Add activeTabRef to preserve tab across re-renders
+  const activeTabRef = useRef('details');
+  
+  // Add local state to track data directly
+  const [localProceedings, setLocalProceedings] = useState([]);
+  const [localComments, setLocalComments] = useState([]);
+  const [localParties, setLocalParties] = useState([]);
   
   // Proceeding states
   const [showProceedingForm, setShowProceedingForm] = useState(false);
@@ -1739,6 +1638,113 @@ const CaseDetailModal = ({
   ];
 
   // ============================================
+  // ✅ Reset transient per-case UI when a DIFFERENT case is opened.
+  // The modal no longer unmounts between cases (see App.jsx fix), so any
+  // open form / search text / selected-item state left over from the
+  // previous case must be cleared explicitly instead of relying on a
+  // fresh mount to reset it.
+  // ============================================
+  const prevCaseIdRef = useRef(null);
+  useEffect(() => {
+    if (caseId && prevCaseIdRef.current && prevCaseIdRef.current !== caseId) {
+      setShowProceedingForm(false);
+      setShowEditProceedingForm(false);
+      setEditingProceeding(null);
+      setShowCommentForm(false);
+      setShowEditCommentForm(false);
+      setEditingComment(null);
+      setShowAddPartyForm(false);
+      setShowEditPartyForm(false);
+      setEditingParty(null);
+      setDeleteModalOpen(false);
+      setDeleteTargetId(null);
+      setDeleteTargetType('');
+      setProceedingSearch('');
+      setCommentSearch('');
+      setPartySearch('');
+      setSelectedProceeding(null);
+      setShowProceedingDetail(false);
+      setViewAttachmentModal(false);
+      setSelectedAttachment(null);
+    }
+    prevCaseIdRef.current = caseId;
+  }, [caseId]);
+
+  // ============================================
+  // Sync local state with props when they change
+  // ============================================
+  useEffect(() => {
+    if (proceedings.length > 0) {
+      setLocalProceedings(proceedings);
+    } else if (window.__allProceedings) {
+      const caseIdStr = String(caseId || '');
+      const filtered = window.__allProceedings.filter(p => {
+        const pCaseId = p.caseId?.toString ? p.caseId.toString() : String(p.caseId || '');
+        return pCaseId === caseIdStr;
+      });
+      if (filtered.length > 0) {
+        setLocalProceedings(filtered);
+      }
+    }
+  }, [proceedings, caseId]);
+
+  useEffect(() => {
+    if (comments.length > 0) {
+      setLocalComments(comments);
+    } else if (window.__allComments) {
+      const caseIdStr = String(caseId || '');
+      const filtered = window.__allComments.filter(c => {
+        const cCaseId = c.caseId?.toString ? c.caseId.toString() : String(c.caseId || '');
+        return cCaseId === caseIdStr;
+      });
+      if (filtered.length > 0) {
+        setLocalComments(filtered);
+      }
+    }
+  }, [comments, caseId]);
+
+  useEffect(() => {
+    if (parties.length > 0) {
+      setLocalParties(parties);
+    } else if (window.__allParties) {
+      const caseIdStr = String(caseId || '');
+      const filtered = window.__allParties.filter(p => {
+        const pCaseId = p.caseId?.toString ? p.caseId.toString() : String(p.caseId || '');
+        return pCaseId === caseIdStr;
+      });
+      if (filtered.length > 0) {
+        setLocalParties(filtered);
+      }
+    }
+  }, [parties, caseId]);
+
+  // ✅ CHANGE 2: Save active tab to ref whenever it changes
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+
+  // ============================================
+  // DEBUG: LOG ATTACHMENT DATA
+  // ============================================
+  useEffect(() => {
+    if (caseItem) {
+      console.log('📎 ===== ATTACHMENT DATA DEBUG =====');
+      console.log('📎 Full caseItem:', caseItem);
+      console.log('📎 copyOfSummon:', caseItem.copyOfSummon);
+      console.log('📎 copyOfSummonUrl:', caseItem.copyOfSummonUrl);
+      console.log('📎 copyOfPlaint:', caseItem.copyOfPlaint);
+      console.log('📎 copyOfPlaintUrl:', caseItem.copyOfPlaintUrl);
+      console.log('📎 relevantDepartmentalRecord:', caseItem.relevantDepartmentalRecord);
+      console.log('📎 relevantDepartmentalRecordUrl:', caseItem.relevantDepartmentalRecordUrl);
+      console.log('📎 attachments:', caseItem.attachments);
+      console.log('📎 documents:', caseItem.documents);
+      console.log('📎 files:', caseItem.files);
+      console.log('📎 All keys:', Object.keys(caseItem));
+      console.log('📎 ===== END ATTACHMENT DATA =====');
+    }
+  }, [caseItem]);
+
+  // ============================================
   // GET FUNCTIONS
   // ============================================
   const getAddProceedingFn = useCallback(() => {
@@ -1772,64 +1778,108 @@ const CaseDetailModal = ({
   }, [onAddParty]);
 
   // ============================================
-  // REFRESH DATA FUNCTION
+  // ✅ CHANGE 3: REFRESH DATA FUNCTION - runs in the BACKGROUND now.
+  // It's still useful to keep local state in sync with the server, but it
+  // no longer needs to be awaited before the UI updates (see the
+  // optimistic local-state updates in the add/edit/delete handlers below),
+  // so a slow or momentarily-inconsistent parent refresh can no longer
+  // cause the new item to "disappear" or the modal to lose its place.
   // ============================================
   const refreshData = useCallback(async () => {
+    // ✅ Save current tab before refresh
+    const currentTab = activeTabRef.current;
+    console.log('📌 Current tab before refresh:', currentTab);
+    
     setIsRefreshing(true);
     
     try {
-      let freshParties = [];
-      let freshComments = [];
-      let freshProceedings = [];
+      // ✅ First, call parent's onRefresh if available
+      if (typeof onRefresh === 'function') {
+        await onRefresh();
+        console.log('✅ Parent refresh completed');
+      }
       
-      try {
+      // ✅ Always fetch fresh data from API to ensure we have latest
+      const caseIdStr = caseItem?._id || caseItem?.id || caseItem?.caseId;
+      
+      if (caseIdStr) {
+        console.log('🔄 Fetching fresh data for case:', caseIdStr);
+        
         const [partiesRes, commentsRes, proceedingsRes] = await Promise.all([
           api.get('/parties'),
           api.get('/comments'),
           api.get('/proceedings')
         ]);
         
-        freshParties = partiesRes.data || [];
-        freshComments = commentsRes.data || [];
-        freshProceedings = proceedingsRes.data || [];
+        const freshParties = partiesRes.data?.data || partiesRes.data || [];
+        const freshComments = commentsRes.data?.data || commentsRes.data || [];
+        const freshProceedings = proceedingsRes.data?.data || proceedingsRes.data || [];
         
-      } catch (error) {
+        // ✅ Filter data for this case
+        const caseIdStrForFilter = String(caseIdStr || '');
+        
+        const filteredParties = freshParties.filter(p => {
+          const pCaseId = p.caseId?.toString ? p.caseId.toString() : String(p.caseId || '');
+          return pCaseId === caseIdStrForFilter;
+        });
+        
+        const filteredComments = freshComments.filter(c => {
+          const cCaseId = c.caseId?.toString ? c.caseId.toString() : String(c.caseId || '');
+          return cCaseId === caseIdStrForFilter;
+        });
+        
+        const filteredProceedings = freshProceedings.filter(p => {
+          const pCaseId = p.caseId?.toString ? p.caseId.toString() : String(p.caseId || '');
+          return pCaseId === caseIdStrForFilter;
+        });
+        
+        // ✅ Update local state directly
+        setLocalParties(filteredParties);
+        setLocalComments(filteredComments);
+        setLocalProceedings(filteredProceedings);
+        
+        // Update global state
         if (typeof window !== 'undefined') {
-          freshParties = window.__allParties || [];
-          freshComments = window.__allComments || [];
-          freshProceedings = window.__allProceedings || [];
+          window.__allParties = freshParties;
+          window.__allComments = freshComments;
+          window.__allProceedings = freshProceedings;
+          window.__caseParties = filteredParties;
+          window.__caseComments = filteredComments;
+          window.__caseProceedings = filteredProceedings;
         }
+        
+        console.log('✅ Fresh data fetched - Parties:', filteredParties.length, 'Comments:', filteredComments.length, 'Proceedings:', filteredProceedings.length);
       }
       
-      if (typeof window !== 'undefined') {
-        window.__allParties = freshParties;
-        window.__allComments = freshComments;
-        window.__allProceedings = freshProceedings;
-      }
-      
-      if (typeof onRefresh === 'function') {
-        await onRefresh();
-      }
-      
+      // ✅ Force re-render
       setRefreshTrigger(prev => prev + 1);
       
       return true;
-      
     } catch (error) {
+      console.error('❌ Refresh error:', error);
       return false;
     } finally {
       setIsRefreshing(false);
+      // ✅ Restore the active tab after refresh (kept as a safety net;
+      // the modal no longer unmounts so this is rarely needed now)
+      if (currentTab) {
+        setTimeout(() => {
+          console.log('📌 Restoring tab to:', currentTab);
+          setActiveTab(currentTab);
+        }, 0);
+      }
     }
-  }, [onRefresh, caseId]);
+  }, [onRefresh, caseItem]);
 
   // ============================================
-  // FILTER DATA
+  // FILTER DATA - Use local state first
   // ============================================
   const caseProceedings = useMemo(() => {
     const caseIdFromItem = caseItem?._id || caseItem?.id || caseItem?.caseId || '';
     const caseIdStr = String(caseIdFromItem || '');
     
-    const dataSource = proceedings.length > 0 ? proceedings : (window.__allProceedings || []);
+    // ✅ Use local state first, then props as fallback
+    const dataSource = localProceedings.length > 0 ? localProceedings : proceedings;
     
     if (dataSource.length === 0) return [];
     
@@ -1838,13 +1888,14 @@ const CaseDetailModal = ({
       const pCaseIdStr = String(pCaseId || '');
       return pCaseIdStr === caseIdStr;
     });
-  }, [caseItem, proceedings, refreshTrigger]);
+  }, [caseItem, proceedings, localProceedings]);
 
   const caseComments = useMemo(() => {
     const caseIdFromItem = caseItem?._id || caseItem?.id || caseItem?.caseId || '';
     const caseIdStr = String(caseIdFromItem || '');
     
-    const dataSource = comments.length > 0 ? comments : (window.__allComments || []);
+    // ✅ Use local state first, then props as fallback
+    const dataSource = localComments.length > 0 ? localComments : comments;
     
     if (dataSource.length === 0) return [];
     
@@ -1853,13 +1904,14 @@ const CaseDetailModal = ({
       const cCaseIdStr = String(cCaseId || '');
       return cCaseIdStr === caseIdStr;
     });
-  }, [caseItem, comments, refreshTrigger]);
+  }, [caseItem, comments, localComments]);
 
   const caseParties = useMemo(() => {
     const caseIdFromItem = caseItem?._id || caseItem?.id || caseItem?.caseId || '';
     const caseIdStr = String(caseIdFromItem || '');
     
-    const dataSource = parties.length > 0 ? parties : (window.__allParties || []);
+    // ✅ Use local state first, then props as fallback
+    const dataSource = localParties.length > 0 ? localParties : parties;
     
     if (dataSource.length === 0) return [];
     
@@ -1871,7 +1923,7 @@ const CaseDetailModal = ({
       const pCaseIdStr = String(pCaseId || '');
       return pCaseIdStr === caseIdStr;
     });
-  }, [caseItem, parties, refreshTrigger]);
+  }, [caseItem, parties, localParties]);
 
   // ============================================
   // SEARCH FILTERS
@@ -1909,7 +1961,7 @@ const CaseDetailModal = ({
   }, [caseParties, partySearch]);
 
   // ============================================
-  // VIEW ATTACHMENT HANDLER - FIXED
+  // VIEW ATTACHMENT HANDLER
   // ============================================
   const handleViewAttachment = useCallback((attachment, e) => {
     if (e) {
@@ -1922,25 +1974,104 @@ const CaseDetailModal = ({
       return;
     }
     
-    // If attachment is a string (filename), create an object
-    if (typeof attachment === 'string') {
-      setSelectedAttachment({
-        fileName: attachment,
-        fileUrl: `/uploads/${attachment}`,
-        fileSize: 0,
-        description: ''
-      });
-    } else {
-      setSelectedAttachment({
-        fileName: attachment.fileName || attachment.name || 'File',
-        fileUrl: attachment.fileUrl || attachment.url || attachment.path || 
-                 (attachment.fileName ? `/uploads/${attachment.fileName}` : ''),
-        fileSize: attachment.fileSize || attachment.size || 0,
-        description: attachment.description || attachment.desc || ''
-      });
+    console.log('🔍 Viewing attachment:', attachment);
+    
+    const fileName = attachment.fileName || attachment.name || 'File';
+    let fileUrl = attachment.fileUrl || attachment.url || attachment.path || '';
+    let fileSize = attachment.fileSize || attachment.size || 0;
+    let description = attachment.description || attachment.desc || '';
+    
+    if (!fileUrl || fileUrl.startsWith('/')) {
+      const cleanFileName = fileName.split('/').pop();
+      fileUrl = `http://localhost:5000/uploads/${cleanFileName}`;
     }
+    
+    console.log('📎 Final URL:', fileUrl);
+    console.log('📎 Final fileName:', fileName);
+    
+    setSelectedAttachment({
+      fileName: fileName,
+      fileUrl: fileUrl,
+      fileSize: fileSize,
+      description: description
+    });
     setViewAttachmentModal(true);
   }, []);
+
+  // ============================================
+  // DELETE ATTACHMENT HANDLER
+  // ============================================
+  const handleDeleteAttachment = useCallback(async (attachmentType) => {
+    if (!caseItem || !caseItem._id) {
+      toast.error('Case not found');
+      return;
+    }
+
+    const hasAttachment = caseItem[attachmentType] || caseItem.attachments?.[attachmentType];
+    if (!hasAttachment) {
+      toast.error('Attachment not found');
+      return;
+    }
+
+    try {
+      console.log(`🗑️ Deleting attachment: ${attachmentType} from case: ${caseItem._id}`);
+      
+      const updateData = {
+        [attachmentType]: '',
+        [`${attachmentType}Url`]: null,
+        attachments: {
+          ...(caseItem.attachments || {}),
+          [attachmentType]: ''
+        }
+      };
+      
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] === undefined) {
+          delete updateData[key];
+        }
+      });
+      
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/cases/${caseItem._id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : '',
+        },
+        body: JSON.stringify(updateData),
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        // ✅ Update the internal snapshot immediately so the UI reflects
+        // the deletion without depending on the parent's refresh timing
+        setInternalCaseItem(prev => prev ? ({
+          ...prev,
+          [attachmentType]: '',
+          [`${attachmentType}Url`]: null,
+          attachments: {
+            ...(prev.attachments || {}),
+            [attachmentType]: ''
+          }
+        }) : prev);
+
+        if (onRefresh && typeof onRefresh === 'function') {
+          onRefresh();
+        }
+        
+        setSelectedAttachment(null);
+        setViewAttachmentModal(false);
+        
+        toast.success(`${attachmentType.replace(/([A-Z])/g, ' $1').trim()} deleted successfully!`);
+      } else {
+        toast.error(result.error || 'Failed to delete attachment');
+      }
+    } catch (error) {
+      console.error('❌ Error deleting attachment:', error);
+      toast.error(error.message || 'Failed to delete attachment');
+    }
+  }, [caseItem, onRefresh]);
 
   // ============================================
   // PROCEEDING HANDLERS
@@ -1965,9 +2096,28 @@ const CaseDetailModal = ({
         attachment: data.attachment || null
       };
       
-      await addFn(proceedingData);
-      await refreshData();
+      const result = await addFn(proceedingData);
+      
+      // ✅ Optimistically add to local state immediately so it shows up
+      // right away, without depending on (or being disrupted by) the
+      // background refresh below.
+      const savedProceeding = (result && (result.data || result)) || {};
+      const proceedingToAdd = {
+        ...proceedingData,
+        ...(savedProceeding && typeof savedProceeding === 'object' ? savedProceeding : {}),
+        _id: savedProceeding?._id || savedProceeding?.id || `temp-${Date.now()}`
+      };
+      
+      setLocalProceedings(prev => {
+        const exists = prev.some(p => (p._id || p.id) === proceedingToAdd._id);
+        return exists ? prev : [...prev, proceedingToAdd];
+      });
+      
       toast.success('Proceeding added successfully!');
+      
+      // Background sync with the server (does not block/hide the item we
+      // already added above, and does not affect the open modal/tab)
+      refreshData();
     } catch (error) {
       toast.error(error.message || 'Failed to add proceeding');
     }
@@ -1996,10 +2146,18 @@ const CaseDetailModal = ({
         result = await api.put(`/proceedings/${id}`, editProceedingFormData);
       }
       
+      // ✅ Optimistically update the local record immediately
+      setLocalProceedings(prev => prev.map(p => {
+        const pId = p._id || p.id;
+        return pId === id ? { ...p, ...editProceedingFormData } : p;
+      }));
+      
       setShowEditProceedingForm(false);
       setEditingProceeding(null);
-      await refreshData();
       toast.success('Proceeding updated successfully!');
+      
+      // Background sync with the server
+      refreshData();
     } catch (error) {
       toast.error(error.message || 'Failed to update proceeding');
     }
@@ -2045,7 +2203,7 @@ const CaseDetailModal = ({
   };
 
   // ============================================
-  // COMMENT HANDLERS
+  // ✅ COMMENT HANDLERS - optimistic local update
   // ============================================
   const handleAddCommentSubmit = async (data) => {
     setShowCommentForm(false);
@@ -2074,11 +2232,28 @@ const CaseDetailModal = ({
         date: new Date().toISOString().split('T')[0]
       };
       
-      await addFn(commentData);
-      await refreshData();
-      toast.success('Comment added successfully!');
+      const result = await addFn(commentData);
+      
+      // ✅ Optimistically update local state immediately
+      const savedComment = (result && (result.data || result)) || {};
+      const commentToAdd = {
+        ...commentData,
+        ...(savedComment && typeof savedComment === 'object' ? savedComment : {}),
+        _id: savedComment?._id || savedComment?.id || `temp-${Date.now()}`
+      };
+      
+      setLocalComments(prev => {
+        const exists = prev.some(c => (c._id || c.id) === commentToAdd._id);
+        return exists ? prev : [...prev, commentToAdd];
+      });
+      
+      toast.success('✅ Comment added successfully!');
+      
+      // Background sync with the server
+      refreshData();
       
     } catch (error) {
+      console.error('❌ Error adding comment:', error);
       toast.error(error.message || 'Failed to add comment');
     }
   };
@@ -2119,17 +2294,25 @@ const CaseDetailModal = ({
         result = await api.put(`/comments/${id}`, editCommentFormData);
       }
       
+      // ✅ Optimistically update the local record immediately
+      setLocalComments(prev => prev.map(c => {
+        const cId = c._id || c.id;
+        return cId === id ? { ...c, ...editCommentFormData } : c;
+      }));
+      
       setShowEditCommentForm(false);
       setEditingComment(null);
-      await refreshData();
       toast.success('Comment updated successfully!');
+      
+      // Background sync with the server
+      refreshData();
     } catch (error) {
       toast.error(error.message || 'Failed to update comment');
     }
   };
 
   // ============================================
-  // PARTY HANDLERS
+  // ✅ PARTY HANDLERS - optimistic local update
   // ============================================
   const handleAddPartySubmit = async (data) => {
     setShowAddPartyForm(false);
@@ -2152,10 +2335,27 @@ const CaseDetailModal = ({
         createdBy: data.createdBy || 'Current User'
       };
       
-      await addFn(partyData);
-      await refreshData();
-      toast.success('Party added successfully!');
+      const result = await addFn(partyData);
+      
+      // ✅ Optimistically update local state immediately
+      const savedParty = (result && (result.data || result)) || {};
+      const partyToAdd = {
+        ...partyData,
+        ...(savedParty && typeof savedParty === 'object' ? savedParty : {}),
+        _id: savedParty?._id || savedParty?.id || `temp-${Date.now()}`
+      };
+      
+      setLocalParties(prev => {
+        const exists = prev.some(p => (p._id || p.id) === partyToAdd._id);
+        return exists ? prev : [...prev, partyToAdd];
+      });
+      
+      toast.success('✅ Party added successfully!');
+      
+      // Background sync with the server
+      refreshData();
     } catch (error) {
+      console.error('❌ Error adding party:', error);
       toast.error(error.message || 'Failed to add party');
     }
   };
@@ -2233,11 +2433,18 @@ const CaseDetailModal = ({
         result = response.data;
       }
       
+      // ✅ Optimistically update the local record immediately
+      setLocalParties(prev => prev.map(p => {
+        const pId = p._id || p.id;
+        return pId === id ? { ...p, ...updateData } : p;
+      }));
+      
       setShowEditPartyForm(false);
       setEditingParty(null);
-      
-      await refreshData();
       toast.success('Party updated successfully!');
+      
+      // Background sync with the server
+      refreshData();
       
     } catch (error) {
       toast.error(error.message || 'Failed to update party');
@@ -2268,6 +2475,12 @@ const CaseDetailModal = ({
         deleteFn = onDeleteComment || window.__handleDeleteComment;
       } else if (deleteTargetType === 'party') {
         deleteFn = onDeleteParty || window.__handleDeleteParty;
+      } else if (deleteTargetType === 'attachment') {
+        await handleDeleteAttachment(deleteTargetId);
+        setDeleteModalOpen(false);
+        setDeleteTargetId(null);
+        setDeleteTargetType('');
+        return;
       }
       
       if (typeof deleteFn !== 'function') {
@@ -2276,11 +2489,23 @@ const CaseDetailModal = ({
       }
       
       await deleteFn(deleteTargetId);
+      
+      // ✅ Optimistically remove from local state immediately
+      if (deleteTargetType === 'proceeding') {
+        setLocalProceedings(prev => prev.filter(p => (p._id || p.id) !== deleteTargetId));
+      } else if (deleteTargetType === 'comment') {
+        setLocalComments(prev => prev.filter(c => (c._id || c.id) !== deleteTargetId));
+      } else if (deleteTargetType === 'party') {
+        setLocalParties(prev => prev.filter(p => (p._id || p.id) !== deleteTargetId));
+      }
+      
       setDeleteModalOpen(false);
       setDeleteTargetId(null);
       setDeleteTargetType('');
-      await refreshData();
       toast.success(`${deleteTargetType} deleted successfully!`);
+      
+      // Background sync with the server
+      refreshData();
     } catch (error) {
       toast.error(error.message || `Failed to delete ${deleteTargetType}`);
     }
@@ -2400,7 +2625,7 @@ const CaseDetailModal = ({
   ];
 
   // ============================================
-  // RENDER DETAILS TAB WITH VIEW ATTACHMENT BUTTONS
+  // RENDER DETAILS TAB
   // ============================================
   const renderDetails = () => (
     <div className="space-y-5 max-w-full">
@@ -2528,116 +2753,217 @@ const CaseDetailModal = ({
         </div>
       </div>
 
-      {/* Attachments Section with View Button */}
+      {/* Attachments Section */}
       {(caseItem.attachments || caseItem.copyOfSummon || caseItem.copyOfPlaint || caseItem.relevantDepartmentalRecord) && (
-        <div className="bg-white rounded-xl border border-[#BBE1FA]/30 p-4 shadow-sm w-full">
-          <div className="flex items-center gap-3 mb-3 pb-2 border-b border-[#BBE1FA]/40">
-            <div className="p-2 bg-gradient-to-r from-[#0F4C75] to-[#3282B8] rounded-lg">
-              <FaFileAlt className="text-white" />
+        <div className="bg-white rounded-xl border border-[#BBE1FA]/30 shadow-sm overflow-hidden w-full">
+          <div className="bg-gradient-to-r from-[#0F4C75]/5 to-[#3282B8]/5 px-4 py-3 border-b border-[#BBE1FA]/30 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-1.5 bg-gradient-to-r from-[#0F4C75] to-[#3282B8] rounded-lg">
+                <FaFileAlt className="text-white text-sm" />
+              </div>
+              <h3 className="text-sm font-semibold text-[#1B262C]">Attachments</h3>
+              <span className="text-xs text-[#6B7280] bg-[#F0F4F8] px-2 py-0.5 rounded-full border border-[#BBE1FA]/30">
+                {[
+                  caseItem.copyOfSummon || caseItem.attachments?.copyOfSummon,
+                  caseItem.copyOfPlaint || caseItem.attachments?.copyOfPlaint,
+                  caseItem.relevantDepartmentalRecord || caseItem.attachments?.relevantDepartmentalRecord
+                ].filter(Boolean).length}
+              </span>
             </div>
-            <h3 className="text-sm font-semibold text-[#1B262C] uppercase tracking-wider">Attachments</h3>
+            <span className="text-xs text-[#6B7280] flex items-center gap-1">
+              <FaEye className="text-[10px]" /> Click to view
+            </span>
           </div>
-          <div className="space-y-2">
-            {(caseItem.copyOfSummon || caseItem.attachments?.copyOfSummon) && (
-              <div className="flex items-center justify-between p-2 bg-[#F0F4F8] rounded-lg border border-[#BBE1FA]/30 hover:border-[#3282B8]/50 transition-all group">
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <FaFilePdf className="text-red-500 flex-shrink-0" />
-                  <span className="text-sm text-[#1B262C] truncate">
-                    Copy of summon/Notices/Request to defend
-                  </span>
-                </div>
-                <button
-                  onClick={(e) => handleViewAttachment({
-                    fileName: caseItem.copyOfSummon || caseItem.attachments?.copyOfSummon,
-                    fileUrl: caseItem.copyOfSummonUrl || caseItem.attachments?.copyOfSummonUrl || `/uploads/${caseItem.copyOfSummon || caseItem.attachments?.copyOfSummon}`,
-                    description: 'Copy of summon/Notices/Request to defend'
-                  }, e)}
-                  className="flex-shrink-0 ml-2 px-3 py-1 text-xs font-medium bg-gradient-to-r from-[#0F4C75] to-[#3282B8] text-white rounded-lg hover:shadow-lg hover:shadow-[#0F4C75]/25 transition-all duration-200 flex items-center gap-1 opacity-70 group-hover:opacity-100"
-                  type="button"
-                >
-                  <FaEye className="text-xs" /> View
-                </button>
-              </div>
-            )}
-            {(caseItem.copyOfPlaint || caseItem.attachments?.copyOfPlaint) && (
-              <div className="flex items-center justify-between p-2 bg-[#F0F4F8] rounded-lg border border-[#BBE1FA]/30 hover:border-[#3282B8]/50 transition-all group">
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <FaFilePdf className="text-red-500 flex-shrink-0" />
-                  <span className="text-sm text-[#1B262C] truncate">
-                    Copy of plaint / petition
-                  </span>
-                </div>
-                <button
-                  onClick={(e) => handleViewAttachment({
-                    fileName: caseItem.copyOfPlaint || caseItem.attachments?.copyOfPlaint,
-                    fileUrl: caseItem.copyOfPlaintUrl || caseItem.attachments?.copyOfPlaintUrl || `/uploads/${caseItem.copyOfPlaint || caseItem.attachments?.copyOfPlaint}`,
-                    description: 'Copy of plaint / petition'
-                  }, e)}
-                  className="flex-shrink-0 ml-2 px-3 py-1 text-xs font-medium bg-gradient-to-r from-[#0F4C75] to-[#3282B8] text-white rounded-lg hover:shadow-lg hover:shadow-[#0F4C75]/25 transition-all duration-200 flex items-center gap-1 opacity-70 group-hover:opacity-100"
-                  type="button"
-                >
-                  <FaEye className="text-xs" /> View
-                </button>
-              </div>
-            )}
-            {(caseItem.relevantDepartmentalRecord || caseItem.attachments?.relevantDepartmentalRecord) && (
-              <div className="flex items-center justify-between p-2 bg-[#F0F4F8] rounded-lg border border-[#BBE1FA]/30 hover:border-[#3282B8]/50 transition-all group">
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <FaFilePdf className="text-red-500 flex-shrink-0" />
-                  <span className="text-sm text-[#1B262C] truncate">
-                    Relevant Departmental Record
-                  </span>
-                </div>
-                <button
-                  onClick={(e) => handleViewAttachment({
-                    fileName: caseItem.relevantDepartmentalRecord || caseItem.attachments?.relevantDepartmentalRecord,
-                    fileUrl: caseItem.relevantDepartmentalRecordUrl || caseItem.attachments?.relevantDepartmentalRecordUrl || `/uploads/${caseItem.relevantDepartmentalRecord || caseItem.attachments?.relevantDepartmentalRecord}`,
-                    description: 'Relevant Departmental Record'
-                  }, e)}
-                  className="flex-shrink-0 ml-2 px-3 py-1 text-xs font-medium bg-gradient-to-r from-[#0F4C75] to-[#3282B8] text-white rounded-lg hover:shadow-lg hover:shadow-[#0F4C75]/25 transition-all duration-200 flex items-center gap-1 opacity-70 group-hover:opacity-100"
-                  type="button"
-                >
-                  <FaEye className="text-xs" /> View
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
-      {caseItem.writtenStatements && caseItem.writtenStatements.length > 0 && (
-        <div className="bg-white rounded-xl border border-[#BBE1FA]/30 p-4 shadow-sm w-full">
-          <div className="flex items-center gap-3 mb-3 pb-2 border-b border-[#BBE1FA]/40">
-            <div className="p-2 bg-gradient-to-r from-[#0F4C75] to-[#3282B8] rounded-lg">
-              <FaFileAlt className="text-white" />
-            </div>
-            <h3 className="text-sm font-semibold text-[#1B262C] uppercase tracking-wider">Written Statements</h3>
-          </div>
-          <div className="space-y-2">
-            {caseItem.writtenStatements.map((statement, index) => (
-              <div key={index} className="p-3 bg-[#F0F4F8] rounded-lg border border-[#BBE1FA]/30">
-                <p className="text-sm font-semibold text-[#1B262C]">{statement.title || `Statement ${index + 1}`}</p>
-                {statement.content && (
-                  <p className="text-sm text-[#6B7280] mt-1">{statement.content}</p>
-                )}
-                {statement.fileName && (
-                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-[#BBE1FA]/30">
-                    <p className="text-xs text-[#6B7280]">File: {statement.fileName}</p>
-                    <button
-                      onClick={(e) => handleViewAttachment({
-                        fileName: statement.fileName,
-                        fileUrl: statement.fileUrl || `/uploads/${statement.fileName}`,
-                        description: statement.title || `Statement ${index + 1}`
-                      }, e)}
-                      className="px-3 py-1 text-xs font-medium bg-gradient-to-r from-[#0F4C75] to-[#3282B8] text-white rounded-lg hover:shadow-lg hover:shadow-[#0F4C75]/25 transition-all duration-200 flex items-center gap-1"
-                      type="button"
-                    >
-                      <FaEye className="text-xs" /> View
-                    </button>
+          <div className="divide-y divide-[#BBE1FA]/20">
+            {/* Copy of Summon */}
+            {(caseItem.copyOfSummon || caseItem.attachments?.copyOfSummon) && (
+              <div className="flex items-center justify-between px-4 py-3 hover:bg-[#F8FAFC] transition-all duration-200 group">
+                <div 
+                  onClick={(e) => {
+                    const fileName = caseItem.copyOfSummon || caseItem.attachments?.copyOfSummon;
+                    const fileUrl = caseItem.copyOfSummonUrl || caseItem.attachments?.copyOfSummonUrl || `/uploads/${fileName}`;
+                    handleViewAttachment({
+                      fileName: fileName,
+                      fileUrl: fileUrl,
+                      fileSize: caseItem.copyOfSummonSize || 0,
+                      description: 'Copy of summon/Notices/Request to defend'
+                    }, e);
+                  }}
+                  className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center flex-shrink-0 group-hover:bg-red-100 transition-colors">
+                    <FaFilePdf className="text-red-500 text-sm" />
                   </div>
-                )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-[#1B262C] truncate">
+                      Copy of summon/Notices/Request to defend
+                    </p>
+                    <p className="text-xs text-[#6B7280] truncate">{caseItem.copyOfSummon}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                  <span className="text-xs text-[#6B7280] bg-[#F0F4F8] px-2 py-0.5 rounded-full border border-[#BBE1FA]/30 group-hover:border-[#3282B8]/50 transition-colors">
+                    {caseItem.copyOfSummon?.split('.').pop()?.toUpperCase() || 'FILE'}
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const fileName = caseItem.copyOfSummon || caseItem.attachments?.copyOfSummon;
+                      const fileUrl = caseItem.copyOfSummonUrl || caseItem.attachments?.copyOfSummonUrl || `/uploads/${fileName}`;
+                      handleViewAttachment({
+                        fileName: fileName,
+                        fileUrl: fileUrl,
+                        fileSize: caseItem.copyOfSummonSize || 0,
+                        description: 'Copy of summon/Notices/Request to defend'
+                      }, e);
+                    }}
+                    className="p-1.5 text-[#6B7280] hover:text-[#0F4C75] hover:bg-[#3282B8]/10 rounded-lg transition-all"
+                    title="View"
+                  >
+                    <FaEye className="text-sm" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteTargetId('copyOfSummon');
+                      setDeleteTargetType('attachment');
+                      setDeleteModalOpen(true);
+                    }}
+                    className="p-1.5 text-[#6B7280] hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                    title="Delete"
+                  >
+                    <FaTrash className="text-sm" />
+                  </button>
+                </div>
               </div>
-            ))}
+            )}
+
+            {/* Copy of Plaint */}
+            {(caseItem.copyOfPlaint || caseItem.attachments?.copyOfPlaint) && (
+              <div className="flex items-center justify-between px-4 py-3 hover:bg-[#F8FAFC] transition-all duration-200 group">
+                <div 
+                  onClick={(e) => {
+                    const fileName = caseItem.copyOfPlaint || caseItem.attachments?.copyOfPlaint;
+                    const fileUrl = caseItem.copyOfPlaintUrl || caseItem.attachments?.copyOfPlaintUrl || `/uploads/${fileName}`;
+                    handleViewAttachment({
+                      fileName: fileName,
+                      fileUrl: fileUrl,
+                      fileSize: caseItem.copyOfPlaintSize || 0,
+                      description: 'Copy of plaint / petition'
+                    }, e);
+                  }}
+                  className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center flex-shrink-0 group-hover:bg-red-100 transition-colors">
+                    <FaFilePdf className="text-red-500 text-sm" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-[#1B262C] truncate">
+                      Copy of plaint / petition
+                    </p>
+                    <p className="text-xs text-[#6B7280] truncate">{caseItem.copyOfPlaint}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                  <span className="text-xs text-[#6B7280] bg-[#F0F4F8] px-2 py-0.5 rounded-full border border-[#BBE1FA]/30 group-hover:border-[#3282B8]/50 transition-colors">
+                    {caseItem.copyOfPlaint?.split('.').pop()?.toUpperCase() || 'FILE'}
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const fileName = caseItem.copyOfPlaint || caseItem.attachments?.copyOfPlaint;
+                      const fileUrl = caseItem.copyOfPlaintUrl || caseItem.attachments?.copyOfPlaintUrl || `/uploads/${fileName}`;
+                      handleViewAttachment({
+                        fileName: fileName,
+                        fileUrl: fileUrl,
+                        fileSize: caseItem.copyOfPlaintSize || 0,
+                        description: 'Copy of plaint / petition'
+                      }, e);
+                    }}
+                    className="p-1.5 text-[#6B7280] hover:text-[#0F4C75] hover:bg-[#3282B8]/10 rounded-lg transition-all"
+                    title="View"
+                  >
+                    <FaEye className="text-sm" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteTargetId('copyOfPlaint');
+                      setDeleteTargetType('attachment');
+                      setDeleteModalOpen(true);
+                    }}
+                    className="p-1.5 text-[#6B7280] hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                    title="Delete"
+                  >
+                    <FaTrash className="text-sm" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Relevant Departmental Record */}
+            {(caseItem.relevantDepartmentalRecord || caseItem.attachments?.relevantDepartmentalRecord) && (
+              <div className="flex items-center justify-between px-4 py-3 hover:bg-[#F8FAFC] transition-all duration-200 group">
+                <div 
+                  onClick={(e) => {
+                    const fileName = caseItem.relevantDepartmentalRecord || caseItem.attachments?.relevantDepartmentalRecord;
+                    const fileUrl = caseItem.relevantDepartmentalRecordUrl || caseItem.attachments?.relevantDepartmentalRecordUrl || `/uploads/${fileName}`;
+                    handleViewAttachment({
+                      fileName: fileName,
+                      fileUrl: fileUrl,
+                      fileSize: caseItem.relevantDepartmentalRecordSize || 0,
+                      description: 'Relevant Departmental Record'
+                    }, e);
+                  }}
+                  className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center flex-shrink-0 group-hover:bg-red-100 transition-colors">
+                    <FaFilePdf className="text-red-500 text-sm" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-[#1B262C] truncate">
+                      Relevant Departmental Record
+                    </p>
+                    <p className="text-xs text-[#6B7280] truncate">{caseItem.relevantDepartmentalRecord}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                  <span className="text-xs text-[#6B7280] bg-[#F0F4F8] px-2 py-0.5 rounded-full border border-[#BBE1FA]/30 group-hover:border-[#3282B8]/50 transition-colors">
+                    {caseItem.relevantDepartmentalRecord?.split('.').pop()?.toUpperCase() || 'FILE'}
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const fileName = caseItem.relevantDepartmentalRecord || caseItem.attachments?.relevantDepartmentalRecord;
+                      const fileUrl = caseItem.relevantDepartmentalRecordUrl || caseItem.attachments?.relevantDepartmentalRecordUrl || `/uploads/${fileName}`;
+                      handleViewAttachment({
+                        fileName: fileName,
+                        fileUrl: fileUrl,
+                        fileSize: caseItem.relevantDepartmentalRecordSize || 0,
+                        description: 'Relevant Departmental Record'
+                      }, e);
+                    }}
+                    className="p-1.5 text-[#6B7280] hover:text-[#0F4C75] hover:bg-[#3282B8]/10 rounded-lg transition-all"
+                    title="View"
+                  >
+                    <FaEye className="text-sm" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteTargetId('relevantDepartmentalRecord');
+                      setDeleteTargetType('attachment');
+                      setDeleteModalOpen(true);
+                    }}
+                    className="p-1.5 text-[#6B7280] hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                    title="Delete"
+                  >
+                    <FaTrash className="text-sm" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2651,27 +2977,27 @@ const CaseDetailModal = ({
             <h3 className="text-sm font-semibold text-[#1B262C] uppercase tracking-wider">Law Officer / Departmental Representative</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30 hover:border-[#3282B8]/50 transition-all">
+            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30">
               <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Type</p>
               <p className="text-sm font-semibold text-[#1B262C]">{displayValue(caseItem.lawOfficer.type)}</p>
             </div>
-            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30 hover:border-[#3282B8]/50 transition-all">
+            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30">
               <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Name</p>
               <p className="text-sm font-semibold text-[#1B262C]">{displayValue(caseItem.lawOfficer.name)}</p>
             </div>
-            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30 hover:border-[#3282B8]/50 transition-all">
+            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30">
               <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Designation</p>
               <p className="text-sm font-semibold text-[#1B262C]">{displayValue(caseItem.lawOfficer.designation)}</p>
             </div>
-            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30 hover:border-[#3282B8]/50 transition-all">
+            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30">
               <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Office Address</p>
               <p className="text-sm font-semibold text-[#1B262C]">{displayValue(caseItem.lawOfficer.officeAddress)}</p>
             </div>
-            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30 hover:border-[#3282B8]/50 transition-all">
+            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30">
               <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Official Number</p>
               <p className="text-sm font-semibold text-[#1B262C]">{displayValue(caseItem.lawOfficer.officialNumber)}</p>
             </div>
-            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30 hover:border-[#3282B8]/50 transition-all">
+            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30">
               <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Cell Number</p>
               <p className="text-sm font-semibold text-[#1B262C]">{displayValue(caseItem.lawOfficer.cellNumber)}</p>
             </div>
@@ -2688,27 +3014,27 @@ const CaseDetailModal = ({
             <h3 className="text-sm font-semibold text-[#1B262C] uppercase tracking-wider">Alternate Law Officer / Departmental Representative</h3>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30 hover:border-[#D97706]/50 transition-all">
+            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30">
               <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Type</p>
               <p className="text-sm font-semibold text-[#1B262C]">{displayValue(caseItem.alternateLawOfficer.type)}</p>
             </div>
-            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30 hover:border-[#D97706]/50 transition-all">
+            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30">
               <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Name</p>
               <p className="text-sm font-semibold text-[#1B262C]">{displayValue(caseItem.alternateLawOfficer.name)}</p>
             </div>
-            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30 hover:border-[#D97706]/50 transition-all">
+            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30">
               <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Designation</p>
               <p className="text-sm font-semibold text-[#1B262C]">{displayValue(caseItem.alternateLawOfficer.designation)}</p>
             </div>
-            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30 hover:border-[#D97706]/50 transition-all">
+            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30">
               <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Office Address</p>
               <p className="text-sm font-semibold text-[#1B262C]">{displayValue(caseItem.alternateLawOfficer.officeAddress)}</p>
             </div>
-            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30 hover:border-[#D97706]/50 transition-all">
+            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30">
               <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Official Number</p>
               <p className="text-sm font-semibold text-[#1B262C]">{displayValue(caseItem.alternateLawOfficer.officialNumber)}</p>
             </div>
-            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30 hover:border-[#D97706]/50 transition-all">
+            <div className="bg-gradient-to-r from-[#F0F4F8] to-[#F8FAFC] rounded-lg p-3 border border-[#BBE1FA]/30">
               <p className="text-[10px] text-[#6B7280] uppercase tracking-wider font-medium">Cell Number</p>
               <p className="text-sm font-semibold text-[#1B262C]">{displayValue(caseItem.alternateLawOfficer.cellNumber)}</p>
             </div>
@@ -3631,8 +3957,12 @@ const CaseDetailModal = ({
           setDeleteTargetType('');
         }}
         onConfirm={handleDeleteConfirmed}
-        title={`Delete ${deleteTargetType}?`}
-        message={`Are you sure you want to delete this ${deleteTargetType}? This action cannot be undone.`}
+        title={deleteTargetType === 'attachment' ? 'Delete Attachment?' : `Delete ${deleteTargetType}?`}
+        message={
+          deleteTargetType === 'attachment' 
+            ? 'Are you sure you want to delete this attachment? This action cannot be undone.'
+            : 'This action cannot be undone. Are you sure you want to delete this?'
+        }
       />
 
       {/* ===== PROCEEDING DETAIL MODAL ===== */}
