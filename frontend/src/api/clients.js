@@ -1,150 +1,327 @@
-// src/api/clients.js
-import { api } from './client.js';
+// frontend/src/api/clients.js
+import { api } from './client';
 
 export const clientAPI = {
-  getAll: async (params = {}) => {
+  // Get all clients
+  getAll: async () => {
     try {
-      const queryParams = new URLSearchParams(params);
-      const response = await api.get(`/clients?${queryParams.toString()}`);
-      console.log('📥 getAll response:', response);
+      console.log('📡 GET /clients');
+      const response = await api.get('/clients');
+      console.log('📡 Response:', response);
       
       // Handle different response formats
-      let data = [];
-      if (response && typeof response === 'object') {
-        if (Array.isArray(response)) {
-          data = response;
-        } else if (response.data && Array.isArray(response.data)) {
-          data = response.data;
-        } else if (response.clients && Array.isArray(response.clients)) {
-          data = response.clients;
-        } else if (response.success && response.data && Array.isArray(response.data)) {
-          data = response.data;
-        }
+      if (response && response.success) {
+        return {
+          success: true,
+          data: response.data || response.clients || []
+        };
+      }
+      
+      if (Array.isArray(response)) {
+        return {
+          success: true,
+          data: response
+        };
+      }
+      
+      if (response && response.data) {
+        return {
+          success: true,
+          data: response.data
+        };
       }
       
       return {
-        success: true,
-        data: data,
+        success: false,
+        error: 'Invalid response format'
       };
     } catch (error) {
-      console.error('❌ Error fetching clients:', error);
+      console.error('❌ GET /clients error:', error);
       return {
         success: false,
-        error: error.message || 'Failed to fetch clients',
-        data: [],
+        error: error.message || 'Failed to fetch clients'
       };
     }
   },
-  
+
+  // Get single client
   getById: async (id) => {
     try {
-      // Clean the ID
-      const cleanId = String(id).replace(/["']/g, '').trim();
-      console.log('📥 getById with ID:', cleanId);
+      console.log(`📡 GET /clients/${id}`);
+      const response = await api.get(`/clients/${id}`);
+      console.log('📡 Response:', response);
       
-      const response = await api.get(`/clients/${cleanId}`);
-      console.log('📥 getById response:', response);
-      
-      return {
-        success: true,
-        data: response,
-      };
-    } catch (error) {
-      console.error('❌ Error fetching client:', error);
-      return {
-        success: false,
-        error: error.message || 'Failed to fetch client',
-      };
-    }
-  },
-  
-  create: async (data) => {
-    try {
-      console.log('📝 Creating client with data:', data);
-      const response = await api.post('/clients', data);
-      console.log('📝 Create response:', response);
-      
-      return {
-        success: true,
-        data: response,
-      };
-    } catch (error) {
-      console.error('❌ Error creating client:', error);
-      return {
-        success: false,
-        error: error.message || 'Failed to create client',
-      };
-    }
-  },
-  
-  update: async (id, data) => {
-    try {
-      // ✅ Ensure ID is a string without quotes
-      const cleanId = String(id).replace(/["']/g, '').trim();
-      console.log('📝 Updating client with ID:', cleanId);
-      console.log('📝 Update data:', data);
-      
-      if (!cleanId) {
-        throw new Error('Invalid client ID for update');
+      if (response && response.success) {
+        return {
+          success: true,
+          data: response.data || response.client
+        };
       }
       
-      const response = await api.put(`/clients/${cleanId}`, data);
-      console.log('📝 Update response:', response);
+      if (response && response.data) {
+        return {
+          success: true,
+          data: response.data
+        };
+      }
       
-      // ✅ Return consistent format
-      return {
-        success: true,
-        data: response || data,
-      };
-    } catch (error) {
-      console.error('❌ Error updating client:', error);
       return {
         success: false,
-        error: error.message || 'Failed to update client',
+        error: 'Client not found'
+      };
+    } catch (error) {
+      console.error(`❌ GET /clients/${id} error:`, error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch client'
       };
     }
   },
-  
+
+  // Create new client
+  create: async (clientData) => {
+    try {
+      console.log('📡 POST /clients', clientData);
+      const response = await api.post('/clients', clientData);
+      console.log('📡 Response:', response);
+      
+      if (response && response.success) {
+        return {
+          success: true,
+          data: response.data || response.client
+        };
+      }
+      
+      if (response && response.data) {
+        return {
+          success: true,
+          data: response.data
+        };
+      }
+      
+      return {
+        success: false,
+        error: 'Failed to create client'
+      };
+    } catch (error) {
+      console.error('❌ POST /clients error:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to create client'
+      };
+    }
+  },
+
+  // ✅ FIXED: Update client - uses PATCH
+  update: async (id, clientData) => {
+    try {
+      console.log(`📡 PATCH /clients/${id}`, clientData);
+      
+      if (!id) {
+        console.error('❌ No ID provided for update');
+        return {
+          success: false,
+          error: 'No client ID provided'
+        };
+      }
+      
+      let cleanId = String(id).replace(/["']/g, '').trim();
+      console.log(`📡 Cleaned ID: ${cleanId}`);
+      
+      if (!cleanId || cleanId === 'null' || cleanId === 'undefined') {
+        return {
+          success: false,
+          error: 'Invalid client ID format'
+        };
+      }
+      
+      // Remove ID fields from the data
+      const { _id, id: clientIdField, client_id, ...cleanData } = clientData || {};
+      
+      // ✅ Use PATCH
+      const response = await api.patch(`/clients/${cleanId}`, cleanData);
+      console.log('📡 PATCH response:', response);
+      
+      // Handle different response formats
+      if (response && response.success) {
+        return {
+          success: true,
+          data: response.data || response.client
+        };
+      }
+      
+      if (response && response.data) {
+        return {
+          success: true,
+          data: response.data
+        };
+      }
+      
+      if (response && response._id) {
+        return {
+          success: true,
+          data: response
+        };
+      }
+      
+      if (response) {
+        return {
+          success: true,
+          data: response
+        };
+      }
+      
+      return {
+        success: false,
+        error: 'Failed to update client'
+      };
+    } catch (error) {
+      console.error(`❌ PATCH /clients/${id} error:`, error);
+      
+      if (error.response && error.response.status === 404) {
+        return {
+          success: false,
+          error: 'Client not found. It may have been deleted.',
+          status: 404
+        };
+      }
+      
+      return {
+        success: false,
+        error: error.message || 'Failed to update client'
+      };
+    }
+  },
+
+  // Delete client
   delete: async (id) => {
     try {
-      // ✅ Ensure ID is a string without quotes
-      const cleanId = String(id).replace(/["']/g, '').trim();
-      console.log('🗑️ Deleting client with ID:', cleanId);
+      console.log(`📡 DELETE /clients/${id}`);
       
-      if (!cleanId) {
-        throw new Error('Invalid client ID for deletion');
+      if (!id) {
+        console.error('❌ No ID provided for deletion');
+        return {
+          success: false,
+          error: 'No client ID provided'
+        };
+      }
+      
+      let cleanId = String(id).replace(/["']/g, '').trim();
+      console.log(`📡 Cleaned ID: ${cleanId}`);
+      
+      if (!cleanId || cleanId === 'null' || cleanId === 'undefined') {
+        return {
+          success: false,
+          error: 'Invalid client ID format'
+        };
       }
       
       const response = await api.delete(`/clients/${cleanId}`);
-      console.log('🗑️ Delete response:', response);
+      console.log('📡 DELETE response:', response);
+      
+      if (response && response.success) {
+        return {
+          success: true,
+          data: response.data || response
+        };
+      }
+      
+      if (response && response.message) {
+        return {
+          success: true,
+          data: response
+        };
+      }
+      
+      if (response) {
+        return {
+          success: true,
+          data: response
+        };
+      }
       
       return {
-        success: true,
-        data: response,
+        success: false,
+        error: 'Failed to delete client'
       };
     } catch (error) {
-      console.error('❌ Error deleting client:', error);
+      console.error(`❌ DELETE /clients/${id} error:`, error);
+      
+      if (error.response && error.response.status === 404) {
+        return {
+          success: false,
+          error: 'Client not found. It may have already been deleted.',
+          status: 404
+        };
+      }
+      
       return {
         success: false,
-        error: error.message || 'Failed to delete client',
+        error: error.message || 'Failed to delete client'
       };
     }
   },
-  
-  getCases: async (id) => {
+
+  // Search clients
+  search: async (query) => {
     try {
-      const cleanId = String(id).replace(/["']/g, '').trim();
-      const response = await api.get(`/clients/${cleanId}/cases`);
-      return {
-        success: true,
-        data: response,
-      };
-    } catch (error) {
-      console.error('❌ Error fetching client cases:', error);
+      console.log(`📡 GET /clients/search?q=${query}`);
+      const response = await api.get(`/clients/search?q=${encodeURIComponent(query)}`);
+      console.log('📡 Response:', response);
+      
+      if (response && response.success) {
+        return {
+          success: true,
+          data: response.data || response.clients || []
+        };
+      }
+      
+      if (Array.isArray(response)) {
+        return {
+          success: true,
+          data: response
+        };
+      }
+      
       return {
         success: false,
-        error: error.message || 'Failed to fetch client cases',
+        error: 'Failed to search clients'
+      };
+    } catch (error) {
+      console.error(`❌ GET /clients/search error:`, error);
+      return {
+        success: false,
+        error: error.message || 'Failed to search clients'
       };
     }
   },
+
+  // Get client stats
+  getStats: async () => {
+    try {
+      console.log('📡 GET /clients/stats');
+      const response = await api.get('/clients/stats');
+      console.log('📡 Response:', response);
+      
+      if (response && response.success) {
+        return {
+          success: true,
+          data: response.data || response.stats
+        };
+      }
+      
+      return {
+        success: false,
+        error: 'Failed to get client stats'
+      };
+    } catch (error) {
+      console.error('❌ GET /clients/stats error:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to get client stats'
+      };
+    }
+  }
 };
+
+export default clientAPI;

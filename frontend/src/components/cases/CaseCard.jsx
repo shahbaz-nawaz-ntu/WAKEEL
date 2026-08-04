@@ -636,6 +636,7 @@ const CaseCard = ({
       {/* VIEW MODAL */}
       {showViewModal && (
         <CaseDetailModal 
+          key={caseItem.id || caseItem._id} 
           isOpen={showViewModal}
           case={caseItem}
           onClose={() => setShowViewModal(false)}

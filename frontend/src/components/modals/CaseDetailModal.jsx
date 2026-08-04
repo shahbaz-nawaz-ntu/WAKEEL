@@ -1,5 +1,5 @@
 // src/components/modals/CaseDetailModal.jsx - COMPLETE WITH PROFESSIONAL ATTACHMENTS
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { 
   FaTimes, 
   FaUser, 
@@ -58,7 +58,6 @@ import {
   FaFileCode,
   FaExternalLinkAlt,
   FaPrint,
-  // ✅ ADD MISSING ICONS
   FaMinus,
   FaPlus,
   FaRedo,
@@ -105,7 +104,8 @@ const ViewAttachmentModal = ({ isOpen, onClose, attachment }) => {
   // Get file icon based on extension
   const getFileIcon = (filename, size = '5xl') => {
     const ext = getFileExtension(filename);
-    const className = `text-${size}`;
+    const sizeClassMap = { xl: 'text-xl', '5xl': 'text-5xl' };
+    const className = sizeClassMap[size] || 'text-5xl';
     switch (ext) {
       case 'pdf':
         return <FaFilePdf className={`text-red-500 ${className}`} />;
@@ -1482,7 +1482,7 @@ const DeleteConfirmModal = ({ isOpen, onClose, onConfirm, title, message }) => {
 // ============================================
 const CaseDetailModal = ({ 
   isOpen, 
-  case: caseItem, 
+  case: caseItemProp, 
   onClose, 
   onStatusChange, 
   onEdit,
@@ -1506,6 +1506,41 @@ const CaseDetailModal = ({
   const [activeTab, setActiveTab] = useState('details');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // ============================================
+  // ✅ FIX (root cause of modal closing / "back to main screen"):
+  // The modal used to render straight off the `case` prop. If the parent
+  // re-fetches its case list after an add/edit/delete and briefly renders
+  // this modal with `case` temporarily undefined/null (very common with
+  // React Query / useState-based lists mid-refetch), the guard
+  //   if (!isOpen || !caseItem) return null;
+  // would unmount the ENTIRE modal even though `isOpen` was still true.
+  // That is what looked like "goes back to main screen".
+  //
+  // Fix: keep an internal snapshot of the case that only updates when a
+  // valid (truthy) case comes in from the parent. A transient falsy value
+  // from the parent no longer collapses the modal — only an explicit
+  // isOpen=false (real close) does.
+  // ============================================
+  const [internalCaseItem, setInternalCaseItem] = useState(caseItemProp);
+
+  useEffect(() => {
+    if (caseItemProp) {
+      setInternalCaseItem(caseItemProp);
+    }
+  }, [caseItemProp]);
+
+  // Everything below keeps using `caseItem` exactly as before — no other
+  // reference changes are required anywhere else in the file.
+  const caseItem = internalCaseItem;
+  
+  // ✅ CHANGE 1: Add activeTabRef to preserve tab across re-renders
+  const activeTabRef = useRef('details');
+  
+  // Add local state to track data directly
+  const [localProceedings, setLocalProceedings] = useState([]);
+  const [localComments, setLocalComments] = useState([]);
+  const [localParties, setLocalParties] = useState([]);
   
   // Proceeding states
   const [showProceedingForm, setShowProceedingForm] = useState(false);
@@ -1603,6 +1638,92 @@ const CaseDetailModal = ({
   ];
 
   // ============================================
+  // ✅ Reset transient per-case UI when a DIFFERENT case is opened.
+  // The modal no longer unmounts between cases (see App.jsx fix), so any
+  // open form / search text / selected-item state left over from the
+  // previous case must be cleared explicitly instead of relying on a
+  // fresh mount to reset it.
+  // ============================================
+  const prevCaseIdRef = useRef(null);
+  useEffect(() => {
+    if (caseId && prevCaseIdRef.current && prevCaseIdRef.current !== caseId) {
+      setShowProceedingForm(false);
+      setShowEditProceedingForm(false);
+      setEditingProceeding(null);
+      setShowCommentForm(false);
+      setShowEditCommentForm(false);
+      setEditingComment(null);
+      setShowAddPartyForm(false);
+      setShowEditPartyForm(false);
+      setEditingParty(null);
+      setDeleteModalOpen(false);
+      setDeleteTargetId(null);
+      setDeleteTargetType('');
+      setProceedingSearch('');
+      setCommentSearch('');
+      setPartySearch('');
+      setSelectedProceeding(null);
+      setShowProceedingDetail(false);
+      setViewAttachmentModal(false);
+      setSelectedAttachment(null);
+    }
+    prevCaseIdRef.current = caseId;
+  }, [caseId]);
+
+  // ============================================
+  // Sync local state with props when they change
+  // ============================================
+  useEffect(() => {
+    if (proceedings.length > 0) {
+      setLocalProceedings(proceedings);
+    } else if (window.__allProceedings) {
+      const caseIdStr = String(caseId || '');
+      const filtered = window.__allProceedings.filter(p => {
+        const pCaseId = p.caseId?.toString ? p.caseId.toString() : String(p.caseId || '');
+        return pCaseId === caseIdStr;
+      });
+      if (filtered.length > 0) {
+        setLocalProceedings(filtered);
+      }
+    }
+  }, [proceedings, caseId]);
+
+  useEffect(() => {
+    if (comments.length > 0) {
+      setLocalComments(comments);
+    } else if (window.__allComments) {
+      const caseIdStr = String(caseId || '');
+      const filtered = window.__allComments.filter(c => {
+        const cCaseId = c.caseId?.toString ? c.caseId.toString() : String(c.caseId || '');
+        return cCaseId === caseIdStr;
+      });
+      if (filtered.length > 0) {
+        setLocalComments(filtered);
+      }
+    }
+  }, [comments, caseId]);
+
+  useEffect(() => {
+    if (parties.length > 0) {
+      setLocalParties(parties);
+    } else if (window.__allParties) {
+      const caseIdStr = String(caseId || '');
+      const filtered = window.__allParties.filter(p => {
+        const pCaseId = p.caseId?.toString ? p.caseId.toString() : String(p.caseId || '');
+        return pCaseId === caseIdStr;
+      });
+      if (filtered.length > 0) {
+        setLocalParties(filtered);
+      }
+    }
+  }, [parties, caseId]);
+
+  // ✅ CHANGE 2: Save active tab to ref whenever it changes
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+
+  // ============================================
   // DEBUG: LOG ATTACHMENT DATA
   // ============================================
   useEffect(() => {
@@ -1657,64 +1778,108 @@ const CaseDetailModal = ({
   }, [onAddParty]);
 
   // ============================================
-  // REFRESH DATA FUNCTION
+  // ✅ CHANGE 3: REFRESH DATA FUNCTION - runs in the BACKGROUND now.
+  // It's still useful to keep local state in sync with the server, but it
+  // no longer needs to be awaited before the UI updates (see the
+  // optimistic local-state updates in the add/edit/delete handlers below),
+  // so a slow or momentarily-inconsistent parent refresh can no longer
+  // cause the new item to "disappear" or the modal to lose its place.
   // ============================================
   const refreshData = useCallback(async () => {
+    // ✅ Save current tab before refresh
+    const currentTab = activeTabRef.current;
+    console.log('📌 Current tab before refresh:', currentTab);
+    
     setIsRefreshing(true);
     
     try {
-      let freshParties = [];
-      let freshComments = [];
-      let freshProceedings = [];
+      // ✅ First, call parent's onRefresh if available
+      if (typeof onRefresh === 'function') {
+        await onRefresh();
+        console.log('✅ Parent refresh completed');
+      }
       
-      try {
+      // ✅ Always fetch fresh data from API to ensure we have latest
+      const caseIdStr = caseItem?._id || caseItem?.id || caseItem?.caseId;
+      
+      if (caseIdStr) {
+        console.log('🔄 Fetching fresh data for case:', caseIdStr);
+        
         const [partiesRes, commentsRes, proceedingsRes] = await Promise.all([
           api.get('/parties'),
           api.get('/comments'),
           api.get('/proceedings')
         ]);
         
-        freshParties = partiesRes.data || [];
-        freshComments = commentsRes.data || [];
-        freshProceedings = proceedingsRes.data || [];
+        const freshParties = partiesRes.data?.data || partiesRes.data || [];
+        const freshComments = commentsRes.data?.data || commentsRes.data || [];
+        const freshProceedings = proceedingsRes.data?.data || proceedingsRes.data || [];
         
-      } catch (error) {
+        // ✅ Filter data for this case
+        const caseIdStrForFilter = String(caseIdStr || '');
+        
+        const filteredParties = freshParties.filter(p => {
+          const pCaseId = p.caseId?.toString ? p.caseId.toString() : String(p.caseId || '');
+          return pCaseId === caseIdStrForFilter;
+        });
+        
+        const filteredComments = freshComments.filter(c => {
+          const cCaseId = c.caseId?.toString ? c.caseId.toString() : String(c.caseId || '');
+          return cCaseId === caseIdStrForFilter;
+        });
+        
+        const filteredProceedings = freshProceedings.filter(p => {
+          const pCaseId = p.caseId?.toString ? p.caseId.toString() : String(p.caseId || '');
+          return pCaseId === caseIdStrForFilter;
+        });
+        
+        // ✅ Update local state directly
+        setLocalParties(filteredParties);
+        setLocalComments(filteredComments);
+        setLocalProceedings(filteredProceedings);
+        
+        // Update global state
         if (typeof window !== 'undefined') {
-          freshParties = window.__allParties || [];
-          freshComments = window.__allComments || [];
-          freshProceedings = window.__allProceedings || [];
+          window.__allParties = freshParties;
+          window.__allComments = freshComments;
+          window.__allProceedings = freshProceedings;
+          window.__caseParties = filteredParties;
+          window.__caseComments = filteredComments;
+          window.__caseProceedings = filteredProceedings;
         }
+        
+        console.log('✅ Fresh data fetched - Parties:', filteredParties.length, 'Comments:', filteredComments.length, 'Proceedings:', filteredProceedings.length);
       }
       
-      if (typeof window !== 'undefined') {
-        window.__allParties = freshParties;
-        window.__allComments = freshComments;
-        window.__allProceedings = freshProceedings;
-      }
-      
-      if (typeof onRefresh === 'function') {
-        await onRefresh();
-      }
-      
+      // ✅ Force re-render
       setRefreshTrigger(prev => prev + 1);
       
       return true;
-      
     } catch (error) {
+      console.error('❌ Refresh error:', error);
       return false;
     } finally {
       setIsRefreshing(false);
+      // ✅ Restore the active tab after refresh (kept as a safety net;
+      // the modal no longer unmounts so this is rarely needed now)
+      if (currentTab) {
+        setTimeout(() => {
+          console.log('📌 Restoring tab to:', currentTab);
+          setActiveTab(currentTab);
+        }, 0);
+      }
     }
-  }, [onRefresh, caseId]);
+  }, [onRefresh, caseItem]);
 
   // ============================================
-  // FILTER DATA
+  // FILTER DATA - Use local state first
   // ============================================
   const caseProceedings = useMemo(() => {
     const caseIdFromItem = caseItem?._id || caseItem?.id || caseItem?.caseId || '';
     const caseIdStr = String(caseIdFromItem || '');
     
-    const dataSource = proceedings.length > 0 ? proceedings : (window.__allProceedings || []);
+    // ✅ Use local state first, then props as fallback
+    const dataSource = localProceedings.length > 0 ? localProceedings : proceedings;
     
     if (dataSource.length === 0) return [];
     
@@ -1723,13 +1888,14 @@ const CaseDetailModal = ({
       const pCaseIdStr = String(pCaseId || '');
       return pCaseIdStr === caseIdStr;
     });
-  }, [caseItem, proceedings, refreshTrigger]);
+  }, [caseItem, proceedings, localProceedings]);
 
   const caseComments = useMemo(() => {
     const caseIdFromItem = caseItem?._id || caseItem?.id || caseItem?.caseId || '';
     const caseIdStr = String(caseIdFromItem || '');
     
-    const dataSource = comments.length > 0 ? comments : (window.__allComments || []);
+    // ✅ Use local state first, then props as fallback
+    const dataSource = localComments.length > 0 ? localComments : comments;
     
     if (dataSource.length === 0) return [];
     
@@ -1738,13 +1904,14 @@ const CaseDetailModal = ({
       const cCaseIdStr = String(cCaseId || '');
       return cCaseIdStr === caseIdStr;
     });
-  }, [caseItem, comments, refreshTrigger]);
+  }, [caseItem, comments, localComments]);
 
   const caseParties = useMemo(() => {
     const caseIdFromItem = caseItem?._id || caseItem?.id || caseItem?.caseId || '';
     const caseIdStr = String(caseIdFromItem || '');
     
-    const dataSource = parties.length > 0 ? parties : (window.__allParties || []);
+    // ✅ Use local state first, then props as fallback
+    const dataSource = localParties.length > 0 ? localParties : parties;
     
     if (dataSource.length === 0) return [];
     
@@ -1756,7 +1923,7 @@ const CaseDetailModal = ({
       const pCaseIdStr = String(pCaseId || '');
       return pCaseIdStr === caseIdStr;
     });
-  }, [caseItem, parties, refreshTrigger]);
+  }, [caseItem, parties, localParties]);
 
   // ============================================
   // SEARCH FILTERS
@@ -1794,7 +1961,7 @@ const CaseDetailModal = ({
   }, [caseParties, partySearch]);
 
   // ============================================
-  // VIEW ATTACHMENT HANDLER - FIXED WITH BACKEND URL
+  // VIEW ATTACHMENT HANDLER
   // ============================================
   const handleViewAttachment = useCallback((attachment, e) => {
     if (e) {
@@ -1834,68 +2001,22 @@ const CaseDetailModal = ({
   // ============================================
   // DELETE ATTACHMENT HANDLER
   // ============================================
-  // ============================================
-// DELETE ATTACHMENT HANDLER - FIXED
-// ============================================
-// ============================================
-// DELETE ATTACHMENT HANDLER - FIXED
-// ============================================
-// ============================================
-// DELETE ATTACHMENT HANDLER - FIXED
-// ============================================
-const handleDeleteAttachment = useCallback(async (attachmentType) => {
-  if (!caseItem || !caseItem._id) {
-    toast.error('Case not found');
-    return;
-  }
+  const handleDeleteAttachment = useCallback(async (attachmentType) => {
+    if (!caseItem || !caseItem._id) {
+      toast.error('Case not found');
+      return;
+    }
 
-  // Check if the attachment exists
-  const hasAttachment = caseItem[attachmentType] || caseItem.attachments?.[attachmentType];
-  if (!hasAttachment) {
-    toast.error('Attachment not found');
-    return;
-  }
+    const hasAttachment = caseItem[attachmentType] || caseItem.attachments?.[attachmentType];
+    if (!hasAttachment) {
+      toast.error('Attachment not found');
+      return;
+    }
 
-  try {
-    console.log(`🗑️ Deleting attachment: ${attachmentType} from case: ${caseItem._id}`);
-    
-    // Prepare the update data - only send fields that exist
-    const updateData = {
-      [attachmentType]: '',
-      [`${attachmentType}Url`]: null,
-      attachments: {
-        ...(caseItem.attachments || {}),
-        [attachmentType]: ''
-      }
-    };
-    
-    // Clean up any undefined values
-    Object.keys(updateData).forEach(key => {
-      if (updateData[key] === undefined) {
-        delete updateData[key];
-      }
-    });
-    
-    console.log('📝 Update data for deletion:', updateData);
-    
-    // ✅ Use fetch directly with proper URL to avoid API client issues
-    const token = localStorage.getItem('token');
-    const response = await fetch(`http://localhost:5000/api/cases/${caseItem._id}`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': token ? `Bearer ${token}` : '',
-      },
-      body: JSON.stringify(updateData),
-    });
-    
-    const result = await response.json();
-    console.log('📥 Delete response:', result);
-    
-    if (response.ok && result.success) {
-      // ✅ Update local state immediately
-      const updatedCase = {
-        ...caseItem,
+    try {
+      console.log(`🗑️ Deleting attachment: ${attachmentType} from case: ${caseItem._id}`);
+      
+      const updateData = {
         [attachmentType]: '',
         [`${attachmentType}Url`]: null,
         attachments: {
@@ -1904,24 +2025,54 @@ const handleDeleteAttachment = useCallback(async (attachmentType) => {
         }
       };
       
-      // Update the case in the parent component
-      if (onRefresh && typeof onRefresh === 'function') {
-        await onRefresh();
+      Object.keys(updateData).forEach(key => {
+        if (updateData[key] === undefined) {
+          delete updateData[key];
+        }
+      });
+      
+      const token = localStorage.getItem('token');
+      const response = await fetch(`http://localhost:5000/api/cases/${caseItem._id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': token ? `Bearer ${token}` : '',
+        },
+        body: JSON.stringify(updateData),
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        // ✅ Update the internal snapshot immediately so the UI reflects
+        // the deletion without depending on the parent's refresh timing
+        setInternalCaseItem(prev => prev ? ({
+          ...prev,
+          [attachmentType]: '',
+          [`${attachmentType}Url`]: null,
+          attachments: {
+            ...(prev.attachments || {}),
+            [attachmentType]: ''
+          }
+        }) : prev);
+
+        if (onRefresh && typeof onRefresh === 'function') {
+          onRefresh();
+        }
+        
+        setSelectedAttachment(null);
+        setViewAttachmentModal(false);
+        
+        toast.success(`${attachmentType.replace(/([A-Z])/g, ' $1').trim()} deleted successfully!`);
+      } else {
+        toast.error(result.error || 'Failed to delete attachment');
       }
-      
-      // Close attachment viewer if open
-      setSelectedAttachment(null);
-      setViewAttachmentModal(false);
-      
-      toast.success(`${attachmentType.replace(/([A-Z])/g, ' $1').trim()} deleted successfully!`);
-    } else {
-      toast.error(result.error || 'Failed to delete attachment');
+    } catch (error) {
+      console.error('❌ Error deleting attachment:', error);
+      toast.error(error.message || 'Failed to delete attachment');
     }
-  } catch (error) {
-    console.error('❌ Error deleting attachment:', error);
-    toast.error(error.message || 'Failed to delete attachment');
-  }
-}, [caseItem, onRefresh]);
+  }, [caseItem, onRefresh]);
+
   // ============================================
   // PROCEEDING HANDLERS
   // ============================================
@@ -1945,9 +2096,28 @@ const handleDeleteAttachment = useCallback(async (attachmentType) => {
         attachment: data.attachment || null
       };
       
-      await addFn(proceedingData);
-      await refreshData();
+      const result = await addFn(proceedingData);
+      
+      // ✅ Optimistically add to local state immediately so it shows up
+      // right away, without depending on (or being disrupted by) the
+      // background refresh below.
+      const savedProceeding = (result && (result.data || result)) || {};
+      const proceedingToAdd = {
+        ...proceedingData,
+        ...(savedProceeding && typeof savedProceeding === 'object' ? savedProceeding : {}),
+        _id: savedProceeding?._id || savedProceeding?.id || `temp-${Date.now()}`
+      };
+      
+      setLocalProceedings(prev => {
+        const exists = prev.some(p => (p._id || p.id) === proceedingToAdd._id);
+        return exists ? prev : [...prev, proceedingToAdd];
+      });
+      
       toast.success('Proceeding added successfully!');
+      
+      // Background sync with the server (does not block/hide the item we
+      // already added above, and does not affect the open modal/tab)
+      refreshData();
     } catch (error) {
       toast.error(error.message || 'Failed to add proceeding');
     }
@@ -1976,10 +2146,18 @@ const handleDeleteAttachment = useCallback(async (attachmentType) => {
         result = await api.put(`/proceedings/${id}`, editProceedingFormData);
       }
       
+      // ✅ Optimistically update the local record immediately
+      setLocalProceedings(prev => prev.map(p => {
+        const pId = p._id || p.id;
+        return pId === id ? { ...p, ...editProceedingFormData } : p;
+      }));
+      
       setShowEditProceedingForm(false);
       setEditingProceeding(null);
-      await refreshData();
       toast.success('Proceeding updated successfully!');
+      
+      // Background sync with the server
+      refreshData();
     } catch (error) {
       toast.error(error.message || 'Failed to update proceeding');
     }
@@ -2025,7 +2203,7 @@ const handleDeleteAttachment = useCallback(async (attachmentType) => {
   };
 
   // ============================================
-  // COMMENT HANDLERS
+  // ✅ COMMENT HANDLERS - optimistic local update
   // ============================================
   const handleAddCommentSubmit = async (data) => {
     setShowCommentForm(false);
@@ -2054,11 +2232,28 @@ const handleDeleteAttachment = useCallback(async (attachmentType) => {
         date: new Date().toISOString().split('T')[0]
       };
       
-      await addFn(commentData);
-      await refreshData();
-      toast.success('Comment added successfully!');
+      const result = await addFn(commentData);
+      
+      // ✅ Optimistically update local state immediately
+      const savedComment = (result && (result.data || result)) || {};
+      const commentToAdd = {
+        ...commentData,
+        ...(savedComment && typeof savedComment === 'object' ? savedComment : {}),
+        _id: savedComment?._id || savedComment?.id || `temp-${Date.now()}`
+      };
+      
+      setLocalComments(prev => {
+        const exists = prev.some(c => (c._id || c.id) === commentToAdd._id);
+        return exists ? prev : [...prev, commentToAdd];
+      });
+      
+      toast.success('✅ Comment added successfully!');
+      
+      // Background sync with the server
+      refreshData();
       
     } catch (error) {
+      console.error('❌ Error adding comment:', error);
       toast.error(error.message || 'Failed to add comment');
     }
   };
@@ -2099,17 +2294,25 @@ const handleDeleteAttachment = useCallback(async (attachmentType) => {
         result = await api.put(`/comments/${id}`, editCommentFormData);
       }
       
+      // ✅ Optimistically update the local record immediately
+      setLocalComments(prev => prev.map(c => {
+        const cId = c._id || c.id;
+        return cId === id ? { ...c, ...editCommentFormData } : c;
+      }));
+      
       setShowEditCommentForm(false);
       setEditingComment(null);
-      await refreshData();
       toast.success('Comment updated successfully!');
+      
+      // Background sync with the server
+      refreshData();
     } catch (error) {
       toast.error(error.message || 'Failed to update comment');
     }
   };
 
   // ============================================
-  // PARTY HANDLERS
+  // ✅ PARTY HANDLERS - optimistic local update
   // ============================================
   const handleAddPartySubmit = async (data) => {
     setShowAddPartyForm(false);
@@ -2132,10 +2335,27 @@ const handleDeleteAttachment = useCallback(async (attachmentType) => {
         createdBy: data.createdBy || 'Current User'
       };
       
-      await addFn(partyData);
-      await refreshData();
-      toast.success('Party added successfully!');
+      const result = await addFn(partyData);
+      
+      // ✅ Optimistically update local state immediately
+      const savedParty = (result && (result.data || result)) || {};
+      const partyToAdd = {
+        ...partyData,
+        ...(savedParty && typeof savedParty === 'object' ? savedParty : {}),
+        _id: savedParty?._id || savedParty?.id || `temp-${Date.now()}`
+      };
+      
+      setLocalParties(prev => {
+        const exists = prev.some(p => (p._id || p.id) === partyToAdd._id);
+        return exists ? prev : [...prev, partyToAdd];
+      });
+      
+      toast.success('✅ Party added successfully!');
+      
+      // Background sync with the server
+      refreshData();
     } catch (error) {
+      console.error('❌ Error adding party:', error);
       toast.error(error.message || 'Failed to add party');
     }
   };
@@ -2213,11 +2433,18 @@ const handleDeleteAttachment = useCallback(async (attachmentType) => {
         result = response.data;
       }
       
+      // ✅ Optimistically update the local record immediately
+      setLocalParties(prev => prev.map(p => {
+        const pId = p._id || p.id;
+        return pId === id ? { ...p, ...updateData } : p;
+      }));
+      
       setShowEditPartyForm(false);
       setEditingParty(null);
-      
-      await refreshData();
       toast.success('Party updated successfully!');
+      
+      // Background sync with the server
+      refreshData();
       
     } catch (error) {
       toast.error(error.message || 'Failed to update party');
@@ -2262,11 +2489,23 @@ const handleDeleteAttachment = useCallback(async (attachmentType) => {
       }
       
       await deleteFn(deleteTargetId);
+      
+      // ✅ Optimistically remove from local state immediately
+      if (deleteTargetType === 'proceeding') {
+        setLocalProceedings(prev => prev.filter(p => (p._id || p.id) !== deleteTargetId));
+      } else if (deleteTargetType === 'comment') {
+        setLocalComments(prev => prev.filter(c => (c._id || c.id) !== deleteTargetId));
+      } else if (deleteTargetType === 'party') {
+        setLocalParties(prev => prev.filter(p => (p._id || p.id) !== deleteTargetId));
+      }
+      
       setDeleteModalOpen(false);
       setDeleteTargetId(null);
       setDeleteTargetType('');
-      await refreshData();
       toast.success(`${deleteTargetType} deleted successfully!`);
+      
+      // Background sync with the server
+      refreshData();
     } catch (error) {
       toast.error(error.message || `Failed to delete ${deleteTargetType}`);
     }
@@ -2386,7 +2625,7 @@ const handleDeleteAttachment = useCallback(async (attachmentType) => {
   ];
 
   // ============================================
-  // RENDER DETAILS TAB - WITH PROFESSIONAL ATTACHMENTS
+  // RENDER DETAILS TAB
   // ============================================
   const renderDetails = () => (
     <div className="space-y-5 max-w-full">
@@ -2514,7 +2753,7 @@ const handleDeleteAttachment = useCallback(async (attachmentType) => {
         </div>
       </div>
 
-      {/* ===== PROFESSIONAL ATTACHMENTS SECTION WITH DELETE ===== */}
+      {/* Attachments Section */}
       {(caseItem.attachments || caseItem.copyOfSummon || caseItem.copyOfPlaint || caseItem.relevantDepartmentalRecord) && (
         <div className="bg-white rounded-xl border border-[#BBE1FA]/30 shadow-sm overflow-hidden w-full">
           <div className="bg-gradient-to-r from-[#0F4C75]/5 to-[#3282B8]/5 px-4 py-3 border-b border-[#BBE1FA]/30 flex items-center justify-between">
@@ -2524,7 +2763,11 @@ const handleDeleteAttachment = useCallback(async (attachmentType) => {
               </div>
               <h3 className="text-sm font-semibold text-[#1B262C]">Attachments</h3>
               <span className="text-xs text-[#6B7280] bg-[#F0F4F8] px-2 py-0.5 rounded-full border border-[#BBE1FA]/30">
-                {[caseItem.copyOfSummon, caseItem.copyOfPlaint, caseItem.relevantDepartmentalRecord].filter(Boolean).length}
+                {[
+                  caseItem.copyOfSummon || caseItem.attachments?.copyOfSummon,
+                  caseItem.copyOfPlaint || caseItem.attachments?.copyOfPlaint,
+                  caseItem.relevantDepartmentalRecord || caseItem.attachments?.relevantDepartmentalRecord
+                ].filter(Boolean).length}
               </span>
             </div>
             <span className="text-xs text-[#6B7280] flex items-center gap-1">
@@ -2721,77 +2964,6 @@ const handleDeleteAttachment = useCallback(async (attachmentType) => {
                 </div>
               </div>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* ===== WRITTEN STATEMENTS - WITH CLICK HANDLERS ===== */}
-      {caseItem.writtenStatements && caseItem.writtenStatements.length > 0 && (
-        <div className="bg-white rounded-xl border border-[#BBE1FA]/30 p-4 shadow-sm w-full">
-          <div className="flex items-center gap-3 mb-3 pb-2 border-b border-[#BBE1FA]/40">
-            <div className="p-2 bg-gradient-to-r from-[#0F4C75] to-[#3282B8] rounded-lg">
-              <FaFileAlt className="text-white" />
-            </div>
-            <h3 className="text-sm font-semibold text-[#1B262C] uppercase tracking-wider">Written Statements</h3>
-            <span className="text-xs text-[#6B7280] ml-auto">Click to view</span>
-          </div>
-          <div className="space-y-2">
-            {caseItem.writtenStatements.map((statement, index) => {
-              const hasFile = statement.fileName || statement.file;
-              const hasContent = statement.content && statement.content.trim().length > 0;
-              
-              return (
-                <div 
-                  key={index}
-                  onClick={(e) => {
-                    if (hasFile) {
-                      const fileName = statement.fileName || statement.file;
-                      const fileUrl = statement.fileUrl || `/uploads/${fileName}`;
-                      console.log('📎 Viewing Written Statement:', { fileName, fileUrl });
-                      handleViewAttachment({
-                        fileName: fileName,
-                        fileUrl: fileUrl,
-                        fileSize: statement.fileSize || 0,
-                        description: statement.title || `Written Statement ${index + 1}`
-                      }, e);
-                    } else if (hasContent) {
-                      toast.info(`Statement: ${statement.title || 'Untitled'}\n\n${statement.content}`);
-                    } else {
-                      toast.info(`Statement: ${statement.title || 'Untitled'} - No content available`);
-                    }
-                  }}
-                  className={`p-3 bg-[#F0F4F8] rounded-lg border border-[#BBE1FA]/30 ${(hasFile || hasContent) ? 'cursor-pointer hover:bg-[#BBE1FA]/50 hover:border-[#3282B8]' : ''} transition-all duration-200 group`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      {hasFile ? (
-                        <FaFilePdf className="text-red-500 flex-shrink-0" />
-                      ) : hasContent ? (
-                        <FaFileAlt className="text-blue-500 flex-shrink-0" />
-                      ) : (
-                        <FaFileAlt className="text-gray-400 flex-shrink-0" />
-                      )}
-                      <div>
-                        <p className="text-sm font-semibold text-[#1B262C]">
-                          {statement.title || `Statement ${index + 1}`}
-                        </p>
-                        {statement.fileName && (
-                          <p className="text-xs text-[#6B7280]">{statement.fileName}</p>
-                        )}
-                        {statement.content && !statement.fileName && (
-                          <p className="text-xs text-[#6B7280] truncate max-w-md">{statement.content.substring(0, 100)}...</p>
-                        )}
-                      </div>
-                    </div>
-                    {(hasFile || hasContent) && (
-                      <span className="text-xs text-[#6B7280] group-hover:text-[#0F4C75] flex items-center gap-1">
-                        <FaEye className="text-xs" /> View
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
           </div>
         </div>
       )}

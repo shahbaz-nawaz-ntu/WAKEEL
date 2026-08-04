@@ -7,7 +7,7 @@ export const useClients = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // ✅ Helper to clean ID - removes quotes and trims
+  // Helper to clean ID
   const sanitizeId = (id) => {
     console.log('🔍 sanitizeId received:', id, 'type:', typeof id);
     
@@ -16,19 +16,21 @@ export const useClients = () => {
       return null;
     }
     
-    // Convert to string if it's not already
+    if (typeof id === 'object') {
+      console.log('📝 ID is an object, extracting _id or id');
+      const objId = id._id || id.id || null;
+      console.log('📝 Extracted ID from object:', objId);
+      if (objId) {
+        return sanitizeId(objId);
+      }
+      console.log('❌ Object has no _id or id property');
+      return null;
+    }
+    
     let clean = String(id);
-    console.log('📝 After String conversion:', clean);
-    
-    // Remove ALL quotes (both single and double)
     clean = clean.replace(/["']/g, '');
-    console.log('📝 After removing quotes:', clean);
-    
-    // Trim whitespace
     clean = clean.trim();
-    console.log('📝 After trim:', clean);
     
-    // Check if we have a valid ID after cleaning
     if (!clean || clean === '' || clean === 'null' || clean === 'undefined') {
       console.log('❌ ID is invalid after cleaning');
       return null;
@@ -60,8 +62,6 @@ export const useClients = () => {
     } catch (err) {
       console.error('❌ Error fetching clients:', err);
       setError(err.message);
-      
-      // Use dummy data as fallback
       const dummyClients = getDummyClients();
       setClients(dummyClients);
       return { success: false, error: err.message, data: dummyClients };
@@ -80,7 +80,6 @@ export const useClients = () => {
     setError(null);
     try {
       console.log('👤 Adding new client:', clientData);
-      
       const response = await clientAPI.create(clientData);
       console.log('👤 Add client response:', response);
 
@@ -102,45 +101,67 @@ export const useClients = () => {
     }
   }, []);
 
-  // ✅ FIXED: updateClient with proper ID handling
+  // ✅ SIMPLIFIED FIXED: updateClient
   const updateClient = useCallback(async (id, updatedData) => {
     console.log('📝 updateClient called with ID:', id);
     console.log('📝 ID type:', typeof id);
     console.log('📝 Updated data:', updatedData);
     
+    // If ID is undefined/null, try to get it from updatedData
+    let finalId = id;
+    let finalData = updatedData;
+    
+    // If id is undefined/null and updatedData is an object with ID
+    if (!finalId && updatedData && typeof updatedData === 'object') {
+      finalId = updatedData._id || updatedData.id || updatedData.clientId || null;
+      finalData = updatedData;
+      console.log('📝 Found ID in updatedData object:', finalId);
+    }
+    
+    // If finalId is an object with ID
+    if (finalId && typeof finalId === 'object') {
+      finalId = finalId._id || finalId.id || null;
+      console.log('📝 Extracted ID from object:', finalId);
+    }
+    
+    const sanitizedId = sanitizeId(finalId);
+    
+    if (!sanitizedId) {
+      console.error('❌ Invalid client ID after sanitization');
+      return { success: false, error: 'Invalid client ID' };
+    }
+
+    console.log(`📝 Updating client with ID: "${sanitizedId}"`);
+    
     setLoading(true);
     setError(null);
+    
     try {
-      // ✅ Sanitize the ID
-      const sanitizedId = sanitizeId(id);
+      // Remove ID fields from data
+      const { _id, id: clientIdField, client_id, ...cleanData } = finalData || {};
       
-      if (!sanitizedId) {
-        console.error('❌ Invalid client ID after sanitization');
-        setError('Invalid client ID');
-        return { success: false, error: 'Invalid client ID' };
-      }
-
-      console.log(`📝 Updating client with ID: "${sanitizedId}"`);
-      
-      // ✅ Format the data
       const payload = {
-        name: updatedData.name || '',
-        email: updatedData.email || '',
-        phone: updatedData.phone || '',
-        company: updatedData.company || '',
-        type: updatedData.type || 'Individual',
-        status: updatedData.status || 'active',
-        address: updatedData.address || '',
-        city: updatedData.city || '',
-        state: updatedData.state || '',
-        zipCode: updatedData.zipCode || '',
-        country: updatedData.country || '',
-        notes: updatedData.notes || '',
+        name: cleanData.name || '',
+        email: cleanData.email || '',
+        phone: cleanData.phone || '',
+        company: cleanData.company || '',
+        type: cleanData.type || 'Individual',
+        status: cleanData.status || 'active',
+        address: cleanData.address || '',
+        city: cleanData.city || '',
+        state: cleanData.state || '',
+        zipCode: cleanData.zipCode || '',
+        country: cleanData.country || '',
+        notes: cleanData.notes || '',
+        gst: cleanData.gst || '',
+        pan: cleanData.pan || '',
+        website: cleanData.website || '',
+        industry: cleanData.industry || '',
       };
       
       console.log('📝 Request payload:', payload);
       
-      // ✅ Call the API with the sanitized ID
+      // Call the API with the sanitized ID
       const response = await clientAPI.update(sanitizedId, payload);
       console.log('📝 Update response:', response);
 
@@ -148,25 +169,34 @@ export const useClients = () => {
         throw new Error(response.error || 'Failed to update client');
       }
 
+      // Get the updated client data
       const updatedClient = response.data ? {
         ...response.data,
-        id: response.data.id || response.data._id || sanitizedId
+        id: response.data.id || response.data._id || sanitizedId,
+        _id: response.data._id || response.data.id || sanitizedId
       } : {
         ...payload,
-        id: sanitizedId
+        id: sanitizedId,
+        _id: sanitizedId
       };
       
-      // ✅ Update the clients state
-      setClients(prev => {
-        const updated = prev.map(client => {
-          const clientId = client.id || client._id;
-          return clientId === sanitizedId ? updatedClient : client;
+      console.log('📝 Updated client data:', updatedClient);
+      
+      // ✅ Update the clients state - find and replace the updated client
+      setClients(prevClients => {
+        const updated = prevClients.map(client => {
+          const clientIdField = client.id || client._id;
+          if (clientIdField === sanitizedId) {
+            console.log('✅ Found and updating client:', client.name);
+            return { ...client, ...updatedClient };
+          }
+          return client;
         });
-        console.log('📝 Updated clients state:', updated);
+        console.log('📝 Updated clients state length:', updated.length);
         return updated;
       });
       
-      console.log('✅ Client updated:', updatedClient);
+      console.log('✅ Client updated successfully:', updatedClient);
       return { success: true, data: updatedClient };
     } catch (err) {
       console.error('❌ Update client error:', err);
@@ -180,20 +210,19 @@ export const useClients = () => {
   const deleteClient = useCallback(async (id) => {
     console.log('🗑️ deleteClient called with ID:', id);
     
+    const sanitizedId = sanitizeId(id);
+    
+    if (!sanitizedId) {
+      console.error('❌ Invalid client ID for deletion');
+      return { success: false, error: 'Invalid client ID' };
+    }
+
+    console.log(`🗑️ Deleting client: "${sanitizedId}"`);
+    
     setLoading(true);
     setError(null);
+    
     try {
-      // ✅ Sanitize the ID
-      const sanitizedId = sanitizeId(id);
-      
-      if (!sanitizedId) {
-        console.error('❌ Invalid client ID for deletion');
-        setError('Invalid client ID');
-        return { success: false, error: 'Invalid client ID' };
-      }
-
-      console.log(`🗑️ Deleting client: "${sanitizedId}"`);
-      
       const response = await clientAPI.delete(sanitizedId);
       console.log('🗑️ Delete response:', response);
 
@@ -201,7 +230,6 @@ export const useClients = () => {
         throw new Error(response.error || 'Failed to delete client');
       }
       
-      // ✅ Remove from clients state
       setClients(prev => prev.filter(client => {
         const clientId = client.id || client._id;
         return clientId !== sanitizedId;

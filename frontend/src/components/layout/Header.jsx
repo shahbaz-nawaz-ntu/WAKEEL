@@ -20,7 +20,8 @@ import {
   FaExternalLinkAlt,
   FaList,
   FaFolderOpen,
-  FaTimes
+  FaTimes,
+  FaCalendarDay  // ✅ ADDED: For Today's Schedule icon
 } from 'react-icons/fa';
 import { GiScales } from 'react-icons/gi';
 import LogoutModal from '../common/LogoutModal';
@@ -36,7 +37,8 @@ const Header = ({
   user: propUser = null,
   onLogout = () => {},
   solvedCases = [],
-  referenceCases = []
+  referenceCases = [],
+  onTodaySchedule  // ✅ ADDED: New prop for Today's Schedule
 }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -173,7 +175,7 @@ const Header = ({
     role: 'Senior Attorney'
   };
 
-  // Navigation items
+  // Navigation items - UNCHANGED
   const navItems = [
     { id: 'dashboard', icon: FaHome, label: 'Dashboard' },
     { 
@@ -228,7 +230,13 @@ const Header = ({
     if (onNavigate) onNavigate(itemId);
   };
 
+  // ✅ UPDATED: Handle Today's Schedule from dropdown
   const handleDropdownItemClick = (itemId) => {
+    if (itemId === 'today-schedule') {
+      if (onTodaySchedule) onTodaySchedule();
+      setIsCasesDropdownOpen(false);
+      return;
+    }
     if (onNavigate) onNavigate(itemId);
     setIsCasesDropdownOpen(false);
   };
@@ -368,7 +376,7 @@ const Header = ({
               </div>
             </div>
 
-            {/* Navigation - Desktop */}
+            {/* Navigation - Desktop - UNCHANGED */}
             <nav className="hidden lg:flex items-center gap-1 bg-[#3282B8]/10 rounded-xl p-1 border border-[#3282B8]/20">
               {navItems.map((item) => {
                 if (item.isDropdown) {
@@ -401,6 +409,7 @@ const Header = ({
                         <FaChevronDown className={`text-[10px] ml-0.5 transition-transform duration-200 ${isCasesDropdownOpen ? 'rotate-180' : ''}`} />
                       </button>
 
+                      {/* ✅ DROPDOWN - WITH TODAY'S SCHEDULE ADDED */}
                       {isCasesDropdownOpen && (
                         <div 
                           className="absolute left-0 mt-2 w-64 bg-[#1B262C] border border-[#3282B8]/30 rounded-xl shadow-2xl shadow-[#0F4C75]/20 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200"
@@ -417,6 +426,7 @@ const Header = ({
                           </div>
 
                           <div className="py-1 max-h-[400px] overflow-y-auto bg-[#1B262C]">
+                            {/* All Cases */}
                             <button
                               onClick={() => handleDropdownItemClick('cases')}
                               className={`w-full flex items-center gap-3 px-4 py-2.5 transition-all duration-200 group ${
@@ -441,6 +451,37 @@ const Header = ({
                               </span>
                             </button>
 
+                            {/* ✅ TODAY'S SCHEDULE - ADDED TO DROPDOWN */}
+                            <div className="px-4 py-1">
+                              <div className="border-t border-[#3282B8]/20"></div>
+                            </div>
+                            <button
+                              onClick={() => handleDropdownItemClick('today-schedule')}
+                              className={`w-full flex items-center gap-3 px-4 py-2.5 transition-all duration-200 group ${
+                                activePage === 'today-schedule'
+                                  ? 'bg-[#3282B8]/20 text-white border-r-3 border-r-[#3282B8]'
+                                  : 'text-[#BBE1FA]/70 hover:bg-[#3282B8]/10 hover:text-white'
+                              }`}
+                            >
+                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                                activePage === 'today-schedule'
+                                  ? 'gradient-accent text-white shadow-lg shadow-[#0F4C75]/25'
+                                  : 'bg-[#3282B8]/20 group-hover:bg-[#3282B8]/30'
+                              }`}>
+                                <FaCalendarDay className={`text-sm ${activePage === 'today-schedule' ? 'text-white' : 'text-[#3282B8]'}`} />
+                              </div>
+                              <div className="flex-1 text-left">
+                                <div className="text-sm font-medium text-white">Today's Schedule</div>
+                                <div className="text-[10px] text-[#BBE1FA]/50">Today's hearings & cases</div>
+                              </div>
+                              {stats?.todayCases > 0 && (
+                                <span className="text-xs px-2 py-0.5 bg-red-500 text-white rounded-full font-bold">
+                                  {stats.todayCases}
+                                </span>
+                              )}
+                            </button>
+
+                            {/* Solved Cases */}
                             {solvedCases?.length > 0 && (
                               <>
                                 <div className="px-4 py-1">
@@ -472,6 +513,7 @@ const Header = ({
                               </>
                             )}
 
+                            {/* Reference Cases */}
                             <div className="px-4 py-1">
                               <div className="border-t border-[#3282B8]/20"></div>
                             </div>
@@ -541,7 +583,7 @@ const Header = ({
               })}
             </nav>
 
-            {/* Right Section */}
+            {/* Right Section - UNCHANGED */}
             <div className="flex items-center gap-2">
               {/* Search */}
               <div className="relative" ref={searchRef}>
@@ -759,7 +801,7 @@ const Header = ({
                 )}
               </div>
 
-              {/* Add Case Button */}
+              {/* Add Case Button - UNCHANGED */}
               <button
                 onClick={onAddClick}
                 className="btn-primary text-sm py-1.5 px-4 flex items-center gap-1.5"
