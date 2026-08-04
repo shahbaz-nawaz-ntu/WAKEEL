@@ -37,13 +37,6 @@ export const useClients = () => {
     let clean = String(id);
     clean = clean.replace(/["']/g, '');
     clean = clean.trim();
-  const getAuthHeader = () => {
-    const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-    const headers = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-    };
     
     if (!clean || clean === '' || clean === 'null' || clean === 'undefined') {
       console.log('❌ ID is invalid after cleaning');
